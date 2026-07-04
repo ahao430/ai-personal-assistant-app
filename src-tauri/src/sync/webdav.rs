@@ -59,14 +59,37 @@ impl Webdav {
     }
 
     async fn ensure_dir(&self, path: &str) -> Result<(), String> {
-        // MKCOL 幂等：已存在返回 405，忽略
-        let _ = self
+        let resp = self
             .client
             .request(reqwest::Method::from_bytes(b"MKCOL").unwrap(), self.url(path))
             .basic_auth(&self.cfg.username, Some(&self.cfg.password))
             .send()
             .await
             .map_err(|e| format!("MKCOL {path}: {e}"))?;
+        let status = resp.status();
+        // 成功：200/201；已存在：405 Method Not Allowed；其他视为失败
+        if !status.is_success() && status != reqwest::StatusCode::METHOD_NOT_ALLOWED {
+            return Err(format!("MKCOL {path} returned {status}"));
+        }
+        Ok(())
+    }
+
+    /// 确保 base_url 自身存在；MKCOL 幂等，已存在返回 405，视为成功。
+    pub async fn ensure_root(&self) -> Result<(), String> {
+        let resp = self
+            .client
+            .request(
+                reqwest::Method::from_bytes(b"MKCOL").unwrap(),
+                self.cfg.base_url.as_str(),
+            )
+            .basic_auth(&self.cfg.username, Some(&self.cfg.password))
+            .send()
+            .await
+            .map_err(|e| format!("MKCOL root: {e}"))?;
+        let status = resp.status();
+        if !status.is_success() && status != reqwest::StatusCode::METHOD_NOT_ALLOWED {
+            return Err(format!("MKCOL root returned {status}"));
+        }
         Ok(())
     }
 
@@ -74,12 +97,12 @@ impl Webdav {
         let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
         let mut acc = String::new();
         for p in parts {
-            if !acc.is_empty() {
-                acc.push('/');
-            }
-            acc.push_str(p);
-            acc.push('/');
-            self.ensure_dir(&acc).await?;
+            acc = if acc.is_empty() {
+                p.to_string()
+            } else {
+                format!("{acc}/{p}")
+            };
+            self.ensure_dir(&format!("{acc}/")).await?;
         }
         Ok(())
     }
@@ -92,16 +115,17 @@ impl Webdav {
                 self.mkdirs(parent).await?;
             }
         }
+        let url = self.url(path);
         let resp = self
             .client
-            .put(self.url(path))
+            .put(&url)
             .basic_auth(&self.cfg.username, Some(&self.cfg.password))
             .body(bytes.to_vec())
             .send()
             .await
             .map_err(|e| format!("PUT {path}: {e}"))?;
         if !resp.status().is_success() {
-            return Err(format!("PUT {path} returned {}", resp.status()));
+            return Err(format!("PUT {url} returned {}", resp.status()));
         }
         Ok(())
     }

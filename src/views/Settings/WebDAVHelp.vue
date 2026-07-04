@@ -47,10 +47,16 @@ const providers: Provider[] = [
         hint: "复制好这段密码，离开页面就看不到了。",
       },
       {
+        title: "在网页端创建专用同步文件夹",
+        desc: "坚果云根目录 /dav/ 不允许直接写文件，必须先有一个子文件夹。在网页端「我的文件」里新建一个文件夹，例如：",
+        code: "ai-assistant",
+        hint: "建议把这个文件夹设为同步文件夹；不同步也能用，只是改名时要注意。",
+      },
+      {
         title: "回到 App 填入",
-        desc: "回到上一页，填入以下信息：",
-        code: "URL:   https://dav.jianguoyun.com/dav/\n账号:  你注册的邮箱\n密码:  上一步生成的 WebDAV 密码",
-        hint: "密码字段填 WebDAV 专用密码，不要填登录密码。",
+        desc: "URL 必须指向刚才创建的子文件夹（末尾带斜杠）：",
+        code: "URL:   https://dav.jianguoyun.com/dav/ai-assistant/\n账号:  你注册的邮箱\n密码:  上一步生成的 WebDAV 密码",
+        hint: "URL 路径里的 ai-assistant 要换成你实际创建的文件夹名。",
       },
       {
         title: "点「保存 WebDAV」",

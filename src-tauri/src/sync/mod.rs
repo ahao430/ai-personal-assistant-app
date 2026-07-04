@@ -9,6 +9,7 @@
 pub mod webdav;
 pub mod snapshot;
 pub mod signaling;
+pub mod manifest;
 
 pub use snapshot::*;
 pub use webdav::*;

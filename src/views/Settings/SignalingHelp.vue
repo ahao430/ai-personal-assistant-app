@@ -12,8 +12,9 @@ interface Step {
 }
 
 const intro = {
-  what: "跨设备实时通知服务，需要部署在一台长期在线的服务器上。当你在一台设备发消息、改任务或日程，其他在线设备会秒级收到通知去 WebDAV 拉数据。信令本身不缓存任何内容。",
+  what: "跨设备实时通知服务。当你在一台设备发消息、改任务或日程，其他在线设备会秒级收到通知去 WebDAV 拉数据。信令本身不缓存任何内容。",
   fallback: "不配置信令也能正常使用，App 会退化为「定时同步 + 手动刷新」。配置信令只是为了让同步更即时。",
+  once: "在你本地电脑跑一次 wrangler deploy（5 分钟），Worker 会上传到 Cloudflare 全球边缘网络长期运行。你电脑关机/重装都不影响，任何设备任何网络都能连。",
 };
 
 const steps: Step[] = [
@@ -24,15 +25,15 @@ const steps: Step[] = [
   },
   {
     title: "安装 Wrangler 命令行工具",
-    desc: "Wrangler 是 Cloudflare 的部署工具，只需要在服务器或用于部署的电脑上执行一次；每台设备不用安装 npm 包。",
+    desc: "Wrangler 是 Cloudflare 的部署工具，只需要在任意一台能联网的电脑上跑一次（你本地开发机就行）；每台设备不用都装。",
     code: "npm install -g wrangler\nwrangler login",
     hint: "「wrangler login」会打开浏览器让你授权 Cloudflare 账号。",
   },
   {
     title: "拉取代码并部署 Worker",
-    desc: "本项目的信令服务源码在 worker/ 目录。只需要部署一次到 Cloudflare 或 VPS，保持服务长期在线：",
+    desc: "本项目的信令服务源码在 worker/ 目录。在本地电脑跑一次部署命令，Worker 会上传到 Cloudflare 全球边缘网络运行：",
     code: "cd worker\nnpm install\nnpm run deploy",
-    hint: "首次部署会自动创建 Worker，约 30 秒。成功后会输出一段 URL。",
+    hint: "部署完本地代码就可以删了，Worker 已经在 Cloudflare 上跑，不依赖你电脑。首次约 30 秒，成功会输出一段 URL。",
   },
   {
     title: "回到 App 填入 WebSocket URL",
@@ -46,9 +47,9 @@ const steps: Step[] = [
   },
 ];
 
-const deployPrompt = `请帮我在服务器上用 shell 一键创建并部署这个 App 的 Cloudflare Workers 信令服务，不要依赖 GitHub 或 git clone。
+const deployPrompt = `请帮我用 shell 一键创建并部署这个 App 的 Cloudflare Workers 信令服务，不要依赖 GitHub 或 git clone。
 
-请在服务器终端执行下面的完整命令：
+请在任意一台能联网的电脑（本地开发机即可，不需要服务器）的终端执行下面的完整命令：
 
 cat > install-ai-assistant-signaling.sh <<'SCRIPT'
 set -e
@@ -189,7 +190,7 @@ wss://<worker-name>.<subdomain>.workers.dev/ws
 const faqs = [
   {
     q: "是不是每台设备都要部署信令服务？",
-    a: "不是。信令服务只需要在服务器部署一次。每台设备只要在 App 里填写同一个信令服务地址，并使用各自自动生成的设备 ID。",
+    a: "不是。信令服务只需要在你本地电脑跑一次 wrangler deploy 部署到 Cloudflare，Worker 在 Cloudflare 全球边缘网络长期运行，跟你电脑开不开机无关。每台设备只要在 App 里填写同一个 WebSocket URL，并使用各自自动生成的设备 ID。",
   },
   {
     q: "一个设备配置好后，其他设备只用 WebDAV 同步就行吗？",
@@ -206,6 +207,10 @@ const faqs = [
   {
     q: "不想用 Cloudflare 怎么办？",
     a: "可以把 worker/src/index.ts 改写成 Node.js（ws + express），跑在自己的 VPS 上，逻辑相同。",
+  },
+  {
+    q: "能不能集成到桌面端 App 里，省掉这次部署？",
+    a: "不行。信令服务本质需要「公网可达 + 24/7 在线」，桌面端 App 关机/休眠就没了，家庭网络通常也没公网 IP，手机出门用 4G 根本连不到你电脑。Cloudflare Workers 不在你电脑上跑——是在 Cloudflare 边缘节点跑——所以你电脑关了也不影响。这就是为什么必须部署到 Cloudflare（或别的云）。",
   },
   {
     q: "断网期间的消息会丢吗？",
@@ -259,6 +264,7 @@ async function copyStep(step: Step, idx: number) {
           <h2 class="text-base font-semibold">这是什么</h2>
         </div>
         <p class="text-sm leading-relaxed text-white/90">{{ intro.what }}</p>
+        <p class="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-xs leading-relaxed text-white/90">{{ intro.once }}</p>
         <p class="mt-2 text-xs leading-relaxed text-white/75">{{ intro.fallback }}</p>
       </section>
 
@@ -285,7 +291,7 @@ async function copyStep(step: Step, idx: number) {
       <!-- 步骤 -->
       <section>
         <h3 class="mb-3 px-1 text-sm font-semibold text-stone-800">
-          部署步骤 <span class="text-xs text-stone-400">5 步 · 约 5 分钟</span>
+          部署步骤 <span class="text-xs text-stone-400">5 步 · 约 5 分钟 · 一次性</span>
         </h3>
         <ol class="space-y-3">
           <li

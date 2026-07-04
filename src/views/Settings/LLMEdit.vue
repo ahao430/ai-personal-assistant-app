@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeMount, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import { Button, CellGroup, Field, Picker, Popup, Switch, showToast } from "vant";
@@ -8,6 +8,7 @@ import { getLlmConfig } from "@/db/repos";
 import { listModels } from "@/api/llm";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faCaretDown } from "@fortawesome/free-solid-svg-icons";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const route = useRoute();
 const router = useRouter();
@@ -20,20 +21,10 @@ const model = ref("gpt-4o-mini");
 const temperature = ref(0.7);
 const isDefault = ref(true);
 
-const isDesktop = ref(false);
+const { isDesktop } = useLayoutMode();
 const fetchingModels = ref(false);
 const modelList = ref<string[]>([]);
 const showModelDropdown = ref(false);
-
-onBeforeMount(() => {
-  try {
-    isDesktop.value =
-      "__TAURI_INTERNALS__" in window &&
-      !/android/i.test(navigator.userAgent);
-  } catch {
-    isDesktop.value = false;
-  }
-});
 
 function fillFromRow(row: {
   name: string;

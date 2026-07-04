@@ -18,12 +18,13 @@ export interface SyncResult {
   errors: string[];
 }
 
-export function syncNow(cfg: WebdavConfig): Promise<SyncResult> {
+export function syncNow(cfg: WebdavConfig, broadcast = true): Promise<SyncResult> {
   return invoke<SyncResult>("sync_now", {
     args: {
       baseUrl: cfg.baseUrl,
       username: cfg.username,
       password: cfg.password,
+      broadcast,
     },
   });
 }

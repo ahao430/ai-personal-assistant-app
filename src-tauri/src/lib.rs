@@ -48,7 +48,7 @@ async fn image_gen(
 }
 
 #[tauri::command]
-fn signaling_start(app: tauri::AppHandle, cfg: SignalingConfig) -> Result<(), String> {
+async fn signaling_start(app: tauri::AppHandle, cfg: SignalingConfig) -> Result<(), String> {
     sync::signaling::spawn_signaling_loop(app, cfg);
     Ok(())
 }

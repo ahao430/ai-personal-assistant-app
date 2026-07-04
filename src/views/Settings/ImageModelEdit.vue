@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeMount, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import {
@@ -16,6 +16,7 @@ import { getImageConfig } from "@/db/repos";
 import { listModels } from "@/api/llm";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faCaretDown } from "@fortawesome/free-solid-svg-icons";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const route = useRoute();
 const router = useRouter();
@@ -29,7 +30,7 @@ const defaultSize = ref("1024x1024");
 const defaultQuality = ref("medium");
 const isDefault = ref(true);
 
-const isDesktop = ref(false);
+const { isDesktop } = useLayoutMode();
 const fetchingModels = ref(false);
 const modelList = ref<string[]>([]);
 const showModelDropdown = ref(false);
@@ -47,16 +48,6 @@ const qualityOptions = [
 
 const showSizePicker = ref(false);
 const showQualityPicker = ref(false);
-
-onBeforeMount(() => {
-  try {
-    isDesktop.value =
-      "__TAURI_INTERNALS__" in window &&
-      !/android/i.test(navigator.userAgent);
-  } catch {
-    isDesktop.value = false;
-  }
-});
 
 function fillFromRow(row: {
   name: string;

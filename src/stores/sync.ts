@@ -56,7 +56,7 @@ export const useSyncStore = defineStore("sync", () => {
     return signaling.value.deviceId;
   }
 
-  async function triggerSync(): Promise<SyncResult | null> {
+  async function triggerSync(broadcast = true): Promise<SyncResult | null> {
     if (syncing.value) return null;
     if (!webdav.value.baseUrl) {
       lastError.value = "未配置 WebDAV";
@@ -65,7 +65,7 @@ export const useSyncStore = defineStore("sync", () => {
     syncing.value = true;
     lastError.value = null;
     try {
-      const result = await syncNow(webdav.value);
+      const result = await syncNow(webdav.value, broadcast);
       lastResult.value = result;
       lastSyncedAt.value = Date.now();
       return result;
@@ -88,11 +88,11 @@ export const useSyncStore = defineStore("sync", () => {
     }
   }
 
-  /** 监听 Rust 端发来的 sync-signal 事件，自动触发拉取 */
+  /** 监听 Rust 端发来的 sync-signal 事件，自动触发拉取（被动同步，不再广播） */
   async function startListening() {
     await listen<{ table: string }>("sync-signal", async () => {
-      // 收到信号就触发一次完整 sync（简化处理）
-      await triggerSync();
+      // 收到信号触发一次完整 sync，broadcast=false 避免循环
+      await triggerSync(false);
     });
   }
 

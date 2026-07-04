@@ -93,7 +93,7 @@ async function connect() {
         <Field
           v-model="baseUrl"
           label="URL"
-          placeholder="https://dav.jianguoyun.com/dav/"
+          placeholder="https://dav.jianguoyun.com/dav/ai-assistant/"
         />
         <Field v-model="username" label="账号" />
         <Field v-model="password" label="密码" type="password" />
@@ -144,6 +144,22 @@ async function connect() {
           title="最近错误"
           :label="store.lastError"
         />
+        <Cell
+          v-if="store.lastResult && store.lastResult.errors.length"
+          title="同步错误详情"
+        >
+          <template #label>
+            <div class="space-y-1">
+              <div
+                v-for="(e, i) in store.lastResult.errors"
+                :key="i"
+                class="text-xs text-red-600 break-all"
+              >
+                {{ e }}
+              </div>
+            </div>
+          </template>
+        </Cell>
       </CellGroup>
 
       <div class="px-4 text-xs text-gray-400">

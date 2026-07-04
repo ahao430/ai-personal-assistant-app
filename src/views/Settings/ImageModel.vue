@@ -1,25 +1,16 @@
 <script setup lang="ts">
-import { onBeforeMount, onMounted, shallowRef } from "vue";
+import { onMounted, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import { Button, Cell, CellGroup, Empty, SwipeCell, Tag, showConfirmDialog, showToast } from "vant";
 import { useImageConfigStore } from "@/stores/image-config";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const router = useRouter();
 const store = useImageConfigStore();
+const { isDesktop } = useLayoutMode();
 
-const isDesktop = shallowRef(false);
 const openedId = shallowRef("");
-
-onBeforeMount(() => {
-  try {
-    isDesktop.value =
-      "__TAURI_INTERNALS__" in window &&
-      !/android/i.test(navigator.userAgent);
-  } catch {
-    isDesktop.value = false;
-  }
-});
 
 onMounted(() => store.reload());
 
@@ -51,6 +42,7 @@ async function setDefault(id: string) {
   openedId.value = "";
   showToast("已设为默认");
 }
+
 async function remove(id: string) {
   try {
     await showConfirmDialog({ title: "删除配置", message: "确认删除此画图模型配置？" });
@@ -72,11 +64,13 @@ async function remove(id: string) {
           v-for="c in store.configs"
           :key="c.id"
           :title="c.name"
-          :label="`${c.model} · ${c.default_size}`"
         >
+          <template #label>
+            <span class="model-meta">{{ c.model }} · {{ c.default_size }}</span>
+          </template>
           <template #value>
             <div class="flex items-center justify-end gap-1.5">
-              <Tag v-if="c.is_default" type="primary" plain>默认</Tag>
+              <Tag v-if="c.is_default" type="success" round>默认</Tag>
               <Button class="model-action" size="mini" plain type="primary" @click.stop="edit(c.id)">
                 编辑
               </Button>
@@ -91,6 +85,7 @@ async function remove(id: string) {
                 class="model-action set-default-action"
                 size="mini"
                 plain
+                type="success"
                 @click.stop="setDefault(c.id)"
               >
                 设为默认
@@ -104,11 +99,13 @@ async function remove(id: string) {
         <SwipeCell v-for="c in store.configs" :key="c.id">
           <Cell
             :title="c.name"
-            :label="`${c.model} · ${c.default_size}`"
             @click="toggleActions(c.id)"
           >
+            <template #label>
+              <span class="model-meta">{{ c.model }} · {{ c.default_size }}</span>
+            </template>
             <template #value>
-              <Tag v-if="c.is_default" type="primary" plain>默认</Tag>
+              <Tag v-if="c.is_default" type="success" round>默认</Tag>
             </template>
           </Cell>
           <div v-if="openedId === c.id" class="mobile-actions">
@@ -126,6 +123,7 @@ async function remove(id: string) {
               class="model-action set-default-action"
               size="small"
               plain
+              type="success"
               @click.stop="setDefault(c.id)"
             >
               设为默认
@@ -136,15 +134,17 @@ async function remove(id: string) {
               <Button square type="primary" text="编辑" @click="edit(c.id)" />
               <Button square text="复制" @click="copyConfig(c)" />
               <Button square type="danger" text="删除" @click="remove(c.id)" />
-              <Button v-if="!c.is_default" square text="设为默认" @click="setDefault(c.id)" />
+              <Button v-if="!c.is_default" square type="success" text="设为默认" @click="setDefault(c.id)" />
             </div>
           </template>
         </SwipeCell>
       </CellGroup>
 
-      <Empty v-else description="还没有配置" />
+      <Empty v-else description="还没有配置">
+        <Button type="primary" round @click="add">+ 新增配置</Button>
+      </Empty>
 
-      <div class="mt-4 space-y-2">
+      <div v-if="store.configs.length" class="mt-4 space-y-2">
         <Button block type="primary" @click="add">+ 新增配置</Button>
       </div>
     </div>
@@ -161,6 +161,14 @@ async function remove(id: string) {
 
 .set-default-action {
   min-width: 64px;
+}
+
+.model-meta {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-actions {

@@ -1,11 +1,17 @@
 //! 把 SQLite 中的表导出为 JSON，反过来也能 apply。
-//! 同步流程：
-//!   push：导出本地表 → PUT 到 WebDAV
-//!   pull：GET 远端 JSON → upsert 到本地（按 id 合并）
 //!
-//! 聊天按日期分表 chat_YYYYMMDD，导出时为 `chat/YYYY/MM/DD.json`。
+//! 同步流程（增量）：
+//!   1. GET 远端 manifest.json（首次同步不存在则视为空）
+//!   2. 对每个 unit 比较本地版本 LV 与远端版本 RV：
+//!      - LV > RV：dump → PUT，并把 manifest[unit] = LV
+//!      - RV > LV：GET → upsert（按 updated_at 比较，避免旧覆盖新）
+//!      - LV == RV：跳过
+//!   3. PUT 更新后的 manifest.json
+//!
+//! 聊天按日期分表 chat_YYYYMMDD，导出为 `chat/YYYY/MM/DD.json`。
 //! 其余表整体一个 JSON。
 
+use crate::sync::manifest::Manifest;
 use crate::sync::webdav::{RemoteFile, Webdav};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -19,6 +25,10 @@ pub struct SyncSnapshotArgs {
     pub base_url: String,
     pub username: String,
     pub password: String,
+    /// 主动同步（用户点"立即同步"）为 true：完成后广播 update 给其他设备。
+    /// 信令触发的被动同步必须为 false：避免循环（A→B→A→...）。
+    #[serde(default)]
+    pub broadcast: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -38,11 +48,10 @@ const SIMPLE_TABLES: &[&str] = &[
     "image_configs",
 ];
 
+const REMOTE_MANIFEST: &str = "manifest.json";
+
 fn db_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     Ok(dir.join("assistant.db"))
 }
 
@@ -50,6 +59,16 @@ fn open_db(app: &AppHandle) -> Result<rusqlite::Connection, String> {
     let path = db_path(app)?;
     let conn = rusqlite::Connection::open(&path).map_err(|e| e.to_string())?;
     Ok(conn)
+}
+
+/// 计算 unit 当前的本地版本号：简单表 max(updated_at)，chat 表 max(created_at)。
+/// 表不存在或为空返回 0。
+fn query_unit_version(conn: &rusqlite::Connection, unit: &str) -> i64 {
+    let is_chat = unit.starts_with("chat_");
+    let col = if is_chat { "created_at" } else { "updated_at" };
+    let sql = format!("SELECT COALESCE(MAX({col}), 0) FROM {unit}");
+    conn.query_row(&sql, [], |r| r.get::<_, i64>(0))
+        .unwrap_or(0)
 }
 
 // 通用：把整表导出为 Vec<json!()>
@@ -120,9 +139,13 @@ fn remote_path_for_table(table: &str) -> String {
     format!("{table}.json")
 }
 
-/// Upsert 一行到任意表（按 id 主键）
+/// Upsert 一行到任意表（按 id 主键）。
+/// 非聊天表会带 WHERE 条件：只有当远端行的 updated_at >= 本地时才覆盖，
+/// 避免旧数据覆盖新数据（last-write-wins）。
 fn upsert_row(conn: &rusqlite::Connection, table: &str, row: &Value) -> Result<(), String> {
     let obj = row.as_object().ok_or("row not object")?;
+    let is_chat = table.starts_with("chat_");
+    let version_col = if is_chat { "created_at" } else { "updated_at" };
     let cols: Vec<&String> = obj.keys().collect();
     let placeholders: Vec<String> = (0..cols.len())
         .map(|i| format!("${}", i + 1))
@@ -132,8 +155,14 @@ fn upsert_row(conn: &rusqlite::Connection, table: &str, row: &Value) -> Result<(
         .filter(|c| c.as_str() != "id")
         .map(|c| format!("{c}=excluded.{c}"))
         .collect();
+    // 非聊天表追加 WHERE：避免远端旧行覆盖本地新行
+    let where_clause = if is_chat {
+        String::new()
+    } else {
+        format!(" WHERE excluded.{version_col} >= {table}.{version_col}")
+    };
     let sql = format!(
-        "INSERT INTO {table} ({}) VALUES ({}) ON CONFLICT(id) DO UPDATE SET {}",
+        "INSERT INTO {table} ({}) VALUES ({}) ON CONFLICT(id) DO UPDATE SET {}{where_clause}",
         cols.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(","),
         placeholders.join(","),
         if updates.is_empty() {
@@ -201,21 +230,45 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
     let mut skipped = 0;
     let mut errors: Vec<String> = Vec::new();
 
+    // 确保 base_url 自身存在（首次同步时常需要）
+    if let Err(e) = webdav.ensure_root().await {
+        errors.push(format!("ensure root: {e}"));
+    }
+
     let conn = open_db(&app)?;
+
+    // ----- 拉取远端 manifest -----
+    let mut manifest: Manifest = match webdav.get(REMOTE_MANIFEST).await {
+        Ok(Some(bytes)) => serde_json::from_slice(&bytes).unwrap_or_default(),
+        Ok(None) => Manifest::default(),
+        Err(e) => {
+            errors.push(format!("get manifest: {e}"));
+            Manifest::default()
+        }
+    };
 
     // ----- PUSH 简单表 -----
     for table in SIMPLE_TABLES {
-        match dump_table(&conn, table) {
-            Ok(rows) => {
-                let payload = serde_json::to_vec(&rows).unwrap_or_default();
-                let path = remote_path_for_table(table);
-                if let Err(e) = webdav.put(&path, &payload).await {
-                    errors.push(format!("push {table}: {e}"));
-                } else {
-                    pushed += 1;
-                }
+        let lv = query_unit_version(&conn, table);
+        let rv = manifest.version_of(table);
+        if lv <= rv {
+            skipped += 1;
+            continue;
+        }
+        let rows = match dump_table(&conn, table) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("dump {table}: {e}"));
+                continue;
             }
-            Err(e) => errors.push(format!("dump {table}: {e}")),
+        };
+        let payload = serde_json::to_vec(&rows).unwrap_or_default();
+        let path = remote_path_for_table(table);
+        if let Err(e) = webdav.put(&path, &payload).await {
+            errors.push(format!("push {table}: {e}"));
+        } else {
+            pushed += 1;
+            manifest.set_version(table, lv);
         }
     }
 
@@ -223,6 +276,12 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
     let chat_tables = list_chat_tables(&conn).unwrap_or_default();
     for tname in &chat_tables {
         if let Some((y, m, d)) = date_from_chat_table(tname) {
+            let lv = query_unit_version(&conn, tname);
+            let rv = manifest.version_of(tname);
+            if lv <= rv {
+                skipped += 1;
+                continue;
+            }
             let rows = match dump_table(&conn, tname) {
                 Ok(r) => r,
                 Err(e) => {
@@ -236,12 +295,19 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
                 errors.push(format!("push {tname}: {e}"));
             } else {
                 pushed += 1;
+                manifest.set_version(tname, lv);
             }
         }
     }
 
     // ----- PULL 简单表 -----
     for table in SIMPLE_TABLES {
+        let lv = query_unit_version(&conn, table);
+        let rv = manifest.version_of(table);
+        if rv <= lv {
+            skipped += 1;
+            continue;
+        }
         let path = remote_path_for_table(table);
         match webdav.get(&path).await {
             Ok(Some(bytes)) => {
@@ -265,51 +331,66 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
         }
     }
 
-    // ----- PULL 聊天按日（列 chat/ 目录） -----
-    if let Ok(remote_files) = list_chat_files_recursive(&webdav, "chat").await {
-        for rf in remote_files {
-            let path = &rf.path;
-            // path 形如 .../chat/2026/07/04.json，提取相对路径
-            let rel = match path.find("chat/") {
-                Some(i) => &path[i..],
-                None => continue,
-            };
-            match webdav.get(rel).await {
-                Ok(Some(bytes)) => {
-                    let rows: Vec<Value> = match serde_json::from_slice(&bytes) {
-                        Ok(v) => v,
-                        Err(_) => continue,
-                    };
-                    // 文件名 DD.json → chat_YYYYMMDD
-                    if let Some(fname) = rel.split('/').next_back() {
-                        if let Some(stem) = fname.strip_suffix(".json") {
-                            if stem.len() == 2 {
-                                // 解析 year/month 从路径
-                                let parts: Vec<&str> = rel.split('/').collect();
-                                if parts.len() >= 4 {
-                                    let y = parts[1];
-                                    let m = parts[2];
-                                    let tname = format!("chat_{y}{m}{stem}");
-                                    if let Err(e) = ensure_chat_table(&conn, &tname) {
-                                        errors.push(e);
-                                        continue;
-                                    }
-                                    for row in &rows {
-                                        if let Err(e) = upsert_row(&conn, &tname, row) {
-                                            errors.push(e);
-                                        } else {
-                                            pulled += 1;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+    // ----- PULL 聊天按日（从远端 manifest 找出所有 chat_ unit） -----
+    let chat_units: Vec<String> = manifest
+        .files
+        .keys()
+        .filter(|k| k.starts_with("chat_"))
+        .cloned()
+        .collect();
+    for tname in chat_units {
+        let lv = query_unit_version(&conn, &tname);
+        let rv = manifest.version_of(&tname);
+        if rv <= lv {
+            skipped += 1;
+            continue;
+        }
+        let stem = match tname.strip_prefix("chat_") {
+            Some(s) if s.len() == 8 => s.to_string(),
+            _ => continue,
+        };
+        let (y, m, d) = match (
+            stem[..4].parse::<i32>(),
+            stem[4..6].parse::<u32>(),
+            stem[6..8].parse::<u32>(),
+        ) {
+            (Ok(y), Ok(m), Ok(d)) => (y, m, d),
+            _ => continue,
+        };
+        let path = remote_path_for_chat(y, m, d);
+        match webdav.get(&path).await {
+            Ok(Some(bytes)) => {
+                let rows: Vec<Value> = match serde_json::from_slice(&bytes) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                if let Err(e) = ensure_chat_table(&conn, &tname) {
+                    errors.push(e);
+                    continue;
+                }
+                for row in &rows {
+                    if let Err(e) = upsert_row(&conn, &tname, row) {
+                        errors.push(e);
+                    } else {
+                        pulled += 1;
                     }
                 }
-                Ok(None) => skipped += 1,
-                Err(e) => errors.push(format!("pull {rel}: {e}")),
             }
+            Ok(None) => skipped += 1,
+            Err(e) => errors.push(format!("pull {tname}: {e}")),
         }
+    }
+
+    // ----- 写回远端 manifest -----
+    if let Ok(manifest_bytes) = serde_json::to_vec_pretty(&manifest) {
+        if let Err(e) = webdav.put(REMOTE_MANIFEST, &manifest_bytes).await {
+            errors.push(format!("put manifest: {e}"));
+        }
+    }
+
+    // 主动同步完成后，通过信令通知其他设备拉取变更
+    if args.broadcast {
+        crate::sync::signaling::broadcast_update(&app, "*");
     }
 
     Ok(SyncResult {
@@ -320,29 +401,17 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
     })
 }
 
+#[allow(dead_code)]
 async fn list_chat_files_recursive(
-    webdav: &Webdav,
-    base: &str,
+    _webdav: &Webdav,
+    _base: &str,
 ) -> Result<Vec<RemoteFile>, String> {
-    // 递归遍历 year/month 两层；命中 .json 文件就收集
-    let mut all = Vec::new();
-    let years = webdav.list_dir(base).await.unwrap_or_default();
-    for y in years {
-        let ypath = format!("{base}/{}", basename(&y.path));
-        let months = webdav.list_dir(&ypath).await.unwrap_or_default();
-        for m in months {
-            let mpath = format!("{ypath}/{}", basename(&m.path));
-            let files = webdav.list_dir(&mpath).await.unwrap_or_default();
-            for f in files {
-                if f.path.ends_with(".json") {
-                    all.push(f);
-                }
-            }
-        }
-    }
-    Ok(all)
+    // 增量同步后远端 manifest 已记录所有 chat_ unit，不再需要递归遍历。
+    // 保留函数签名以避免大面积改动；如未来需要再启用可恢复实现。
+    Ok(Vec::new())
 }
 
+#[allow(dead_code)]
 fn basename(p: &str) -> String {
     p.trim_end_matches('/')
         .rsplit('/')

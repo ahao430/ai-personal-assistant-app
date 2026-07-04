@@ -2,19 +2,21 @@
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
-import { Cell, CellGroup } from "vant";
+import { Button, Cell, CellGroup } from "vant";
 import { useLlmConfigStore } from "@/stores/llm-config";
 import { useImageConfigStore } from "@/stores/image-config";
 import { useSyncStore } from "@/stores/sync";
 import { useThemeStore } from "@/stores/theme";
+import { useAppStore } from "@/stores/app";
 
-const APP_VERSION = "0.0.1";
+const APP_VERSION = "0.0.2";
 
 const router = useRouter();
 const llm = useLlmConfigStore();
 const img = useImageConfigStore();
 const sync = useSyncStore();
 const theme = useThemeStore();
+const app = useAppStore();
 
 onMounted(async () => {
   await Promise.all([llm.reload(), img.reload(), sync.load()]);
@@ -22,6 +24,16 @@ onMounted(async () => {
 
 function go(path: string) {
   router.push(path);
+}
+
+function formatTs(ts: number | null): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 </script>
 
@@ -105,6 +117,26 @@ function go(path: string) {
           </template>
         </Cell>
       </CellGroup>
+
+      <section
+        class="rounded-2xl bg-white p-3 shadow-card ring-1 ring-stone-100"
+      >
+        <Button
+          block
+          round
+          type="primary"
+          :loading="app.syncing"
+          :disabled="!sync.webdav.baseUrl"
+          @click="app.triggerSync"
+        >
+          {{ app.syncing ? "同步中..." : "立即同步" }}
+        </Button>
+        <p class="mt-2 text-center text-xs text-stone-500">
+          <span v-if="!sync.webdav.baseUrl">请先配置 WebDAV</span>
+          <span v-else-if="app.lastSyncedAt">上次同步：{{ formatTs(app.lastSyncedAt) }}</span>
+          <span v-else>点击立即同步</span>
+        </p>
+      </section>
 
       <CellGroup title="数据" inset>
         <Cell title="导出 / 导入">
