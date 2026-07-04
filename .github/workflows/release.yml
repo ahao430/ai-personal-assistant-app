@@ -144,7 +144,7 @@ jobs:
           NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 
       - name: Build Android APK
-        run: pnpm tauri android build --apk
+        run: pnpm tauri android build --apk --debug
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 

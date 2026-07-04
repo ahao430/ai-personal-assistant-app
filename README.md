@@ -2,6 +2,13 @@
 
 Tauri + Vue 3 实现的个人助手应用，支持会话、待办、日程、日报、模型配置、画图、WebDAV 备份同步和 Cloudflare Workers 信令。
 
+## v0.0.6 更新
+
+### 安卓
+
+- 修复安卓 APK 无法安装（"解析软件包时出现问题"）的问题：CI 改用 debug 签名构建，跳过未配置 keystore 的限制。
+- 后续若要正式分发，需要自签 keystore 并接入 CI signing 流程。
+
 ## v0.0.5 更新
 
 ### 对话
