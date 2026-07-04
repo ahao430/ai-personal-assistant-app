@@ -22,11 +22,12 @@ export async function appendMessage(
   date: Date,
   msg: Omit<ChatMessageRow, "id" | "created_at" | "attachments"> & {
     attachments?: unknown[];
+    id?: string;
   }
 ): Promise<string> {
   const table = await ensureChatTable(date);
   const db = await getDb();
-  const id = uuid();
+  const id = msg.id ?? uuid();
   const created_at = Date.now();
   await db.execute(
     `INSERT INTO ${table} (id, role, content, model, tokens, attachments, created_at)

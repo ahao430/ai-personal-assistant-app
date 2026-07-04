@@ -32,7 +32,7 @@ if (isDev) {
 <template>
   <button
     v-if="isDev"
-    class="fixed bottom-20 right-4 z-[10000] rounded-full border border-stone-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-700 shadow-lg backdrop-blur"
+    class="fixed bottom-20 left-4 z-[10000] rounded-full border border-stone-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-stone-700 shadow-lg backdrop-blur"
     type="button"
     @click="toggle"
   >

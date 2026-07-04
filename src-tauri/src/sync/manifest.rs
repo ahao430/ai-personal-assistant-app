@@ -16,6 +16,8 @@ use std::collections::HashMap;
 pub struct Manifest {
     #[serde(default)]
     pub files: HashMap<String, ManifestEntry>,
+    #[serde(default)]
+    pub images: HashMap<String, u64>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -40,5 +42,13 @@ impl Manifest {
                 synced_max_updated: v,
             },
         );
+    }
+
+    pub fn image_size(&self, path: &str) -> Option<u64> {
+        self.images.get(path).copied()
+    }
+
+    pub fn set_image(&mut self, path: &str, size: u64) {
+        self.images.insert(path.to_string(), size);
     }
 }

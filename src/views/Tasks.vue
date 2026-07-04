@@ -144,11 +144,12 @@ function fromLocalInput(v: string): number {
           <Cell
             :title="t.title"
             :label="[fmtTime(t.due_at), t.description].filter(Boolean).join(' · ')"
+            class="!items-center"
             is-link
             @click="openEdit(t)"
           >
             <template #icon>
-              <div class="flex items-center pl-3">
+              <div class="flex self-stretch items-center pl-3 pr-2">
                 <Checkbox
                   :model-value="t.status === 'done'"
                   shape="square"

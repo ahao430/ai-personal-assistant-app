@@ -5,7 +5,7 @@ import { Cell, CellGroup, Button, showConfirmDialog, showToast } from "vant";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 // 同步更新：package.json / Cargo.toml / tauri.conf.json 都需要改
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 const REPO_OWNER = "ahao430";
 const REPO_NAME = "ai-personal-assistant-app";
 const REPO_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;
@@ -78,7 +78,7 @@ async function checkUpdate() {
       confirmButtonText: "立即升级",
       cancelButtonText: "稍后",
     })
-      .then(() => openExternal(data.html_url))
+      .then(() => openExternal(`${REPO_URL}/releases/latest`))
       .catch(() => {});
   } catch (e) {
     showToast("检查失败：" + String(e));
@@ -157,9 +157,9 @@ function latestLabel(): string {
         <Cell title="GitHub 仓库" :value="`${REPO_OWNER}/${REPO_NAME}`" is-link @click="openExternal(REPO_URL)" />
         <Cell
           title="Releases"
-          value="查看全部版本"
+          value="最新版下载"
           is-link
-          @click="openExternal(`${REPO_URL}/releases`)"
+          @click="openExternal(`${REPO_URL}/releases/latest`)"
         />
         <Cell
           title="Issues"

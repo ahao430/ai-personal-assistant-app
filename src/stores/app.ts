@@ -19,7 +19,7 @@ export const useAppStore = defineStore("app", () => {
           showToast(`同步完成（${result.errors.length} 个错误）`);
         } else {
           showToast(
-            `已同步 · ↑${result.pushed} ↓${result.pulled} 跳${result.skipped}`
+            `已同步 · ↑${result.pushed} ↓${result.pulled} 图↑${result.imagePushed} 图↓${result.imagePulled} 跳${result.skipped}`
           );
         }
       } else if (sync.lastError) {

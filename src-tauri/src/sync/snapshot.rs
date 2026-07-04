@@ -37,6 +37,8 @@ pub struct SyncResult {
     pub pushed: usize,
     pub pulled: usize,
     pub skipped: usize,
+    pub image_pushed: usize,
+    pub image_pulled: usize,
     pub errors: Vec<String>,
 }
 
@@ -381,6 +383,18 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
         }
     }
 
+    // ----- 同步图片文件 -----
+    let mut image_pushed = 0;
+    let mut image_pulled = 0;
+    match crate::sync::images::sync_images(&app, &webdav, &mut manifest).await {
+        Ok(result) => {
+            image_pushed = result.pushed;
+            image_pulled = result.pulled;
+            errors.extend(result.errors);
+        }
+        Err(e) => errors.push(format!("sync images: {e}")),
+    }
+
     // ----- 写回远端 manifest -----
     if let Ok(manifest_bytes) = serde_json::to_vec_pretty(&manifest) {
         if let Err(e) = webdav.put(REMOTE_MANIFEST, &manifest_bytes).await {
@@ -397,6 +411,8 @@ pub async fn sync_now(app: AppHandle, args: SyncSnapshotArgs) -> Result<SyncResu
         pushed,
         pulled,
         skipped,
+        image_pushed,
+        image_pulled,
         errors,
     })
 }

@@ -15,6 +15,8 @@ export interface SyncResult {
   pushed: number;
   pulled: number;
   skipped: number;
+  imagePushed: number;
+  imagePulled: number;
   errors: string[];
 }
 

@@ -9,7 +9,7 @@ import { useSyncStore } from "@/stores/sync";
 import { useThemeStore } from "@/stores/theme";
 import { useAppStore } from "@/stores/app";
 
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 
 const router = useRouter();
 const llm = useLlmConfigStore();

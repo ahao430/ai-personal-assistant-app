@@ -67,7 +67,7 @@ async function syncNow() {
   await saveWebdav();
   const r = await store.triggerSync();
   if (r) {
-    showToast(`↑${r.pushed} ↓${r.pulled} 跳${r.skipped}${r.errors.length ? ` 错${r.errors.length}` : ""}`);
+    showToast(`↑${r.pushed} ↓${r.pulled} 图↑${r.imagePushed} 图↓${r.imagePulled} 跳${r.skipped}${r.errors.length ? ` 错${r.errors.length}` : ""}`);
   }
 }
 
@@ -163,7 +163,7 @@ async function connect() {
       </CellGroup>
 
       <div class="px-4 text-xs text-gray-400">
-        同步策略：聊天按日 JSON（chat/YYYY/MM/DD.json）；其余表整表 JSON。冲突按 last-write-wins。
+        同步策略：聊天按日 JSON（chat/YYYY/MM/DD.json）；图片按原文件同步到 images/；其余表整表 JSON。冲突按 last-write-wins。
         Workers 挂了不影响数据，只失去实时性。
       </div>
     </div>
