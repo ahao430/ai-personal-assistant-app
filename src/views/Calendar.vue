@@ -15,10 +15,12 @@ import {
   showToast,
 } from "vant";
 import { useEventStore } from "@/stores/event";
+import { useHolidays, type HolidayLabel } from "@/composables/useHolidays";
 import type { EventRow } from "@/db/repos";
 
 const store = useEventStore();
 const router = useRouter();
+const { ensureYear: ensureHolidayYear, getDayLabel: getHolidayLabel, loadedYears } = useHolidays();
 
 const today = new Date();
 const cursor = ref<{ year: number; month: number }>({
@@ -28,6 +30,22 @@ const cursor = ref<{ year: number; month: number }>({
 const selectedDay = ref<number>(today.getDate());
 
 const monthMatrix = computed(() => buildMonthMatrix(cursor.value.year, cursor.value.month));
+
+/** 当月每个日期的节假日展示信息 */
+const cellHolidays = computed<Record<number, HolidayLabel | null>>(() => {
+  // 触发响应式：节假日数据异步加载完后会重算
+  loadedYears.has(cursor.value.year);
+  const map: Record<number, HolidayLabel | null> = {};
+  for (let d = 1; d <= 31; d++) {
+    map[d] = getHolidayLabel(cursor.value.year, cursor.value.month, d);
+  }
+  return map;
+});
+
+const holidayOfSelected = computed(() => {
+  loadedYears.has(cursor.value.year);
+  return getHolidayLabel(cursor.value.year, cursor.value.month, selectedDay.value);
+});
 
 const eventsOfSelectedDay = computed<EventRow[]>(() => {
   const date = new Date(cursor.value.year, cursor.value.month - 1, selectedDay.value);
@@ -85,7 +103,15 @@ function nextMonth() {
 
 watch(cursor, () => store.loadMonth(cursor.value.year, cursor.value.month), { immediate: false });
 
-onMounted(() => store.loadMonth(cursor.value.year, cursor.value.month));
+onMounted(() => {
+  store.loadMonth(cursor.value.year, cursor.value.month);
+  ensureHolidayYear(cursor.value.year);
+});
+
+watch(
+  () => cursor.value.year,
+  (y) => ensureHolidayYear(y),
+);
 
 // 编辑器
 const showEditor = ref(false);
@@ -210,14 +236,40 @@ function cellClass(year: number, month: number, day: number | null) {
       <button
         v-for="(day, i) in monthMatrix"
         :key="i"
-        class="relative flex aspect-square flex-col items-center justify-center text-sm bg-white"
+        class="relative flex aspect-square flex-col items-center justify-center gap-1 bg-white text-base leading-none"
         :class="cellClass(cursor.year, cursor.month, day)"
         @click="day && (selectedDay = day)"
       >
-        <span v-if="day">{{ day }}</span>
+        <span
+          v-if="day"
+          class="relative inline-block"
+        >
+          <span
+            :class="[
+              cellHolidays[day]?.isCanonical && cellHolidays[day]?.isOffDay && day !== selectedDay ? 'text-red-500' : '',
+              cellHolidays[day] && !cellHolidays[day]?.isOffDay && day !== selectedDay ? 'text-stone-400' : '',
+            ]"
+          >{{ day }}</span>
+          <span
+            v-if="cellHolidays[day] && !cellHolidays[day]?.isCanonical"
+            class="absolute -top-2 -right-2.5 rounded-sm px-0.5 text-[11px] leading-tight font-medium"
+            :class="cellHolidays[day]?.isOffDay
+              ? (day === selectedDay ? 'bg-white/20 text-red-100' : 'bg-red-50 text-red-500')
+              : (day === selectedDay ? 'bg-white/20 text-amber-100' : 'bg-amber-50 text-amber-600')"
+          >{{ cellHolidays[day]?.text }}</span>
+        </span>
+        <span
+          v-if="day && cellHolidays[day]?.isCanonical"
+          class="max-w-full truncate px-0.5 text-[11px] leading-tight"
+          :class="[
+            cellHolidays[day]?.isOffDay
+              ? (day === selectedDay ? 'text-red-100' : 'text-red-500')
+              : (day === selectedDay ? 'text-amber-100' : 'text-amber-600'),
+          ]"
+        >{{ cellHolidays[day]?.text }}</span>
         <span
           v-if="day && eventDayMap[day]"
-          class="absolute bottom-1 h-1 w-1 rounded-full bg-current opacity-60"
+          class="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-current opacity-60"
         ></span>
       </button>
     </div>
@@ -225,8 +277,17 @@ function cellClass(year: number, month: number, day: number | null) {
     <!-- 当日事件 -->
     <div class="mt-2 p-3">
       <div class="mb-2 flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-gray-700">
-          {{ cursor.month }} 月 {{ selectedDay }} 日
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <span>{{ cursor.month }} 月 {{ selectedDay }} 日</span>
+          <Tag
+            v-if="holidayOfSelected"
+            plain
+            :type="holidayOfSelected.isOffDay ? 'danger' : 'warning'"
+          >
+            {{ holidayOfSelected.isCanonical
+              ? `${holidayOfSelected.text}${holidayOfSelected.isOffDay ? ' · 休' : ' · 班'}`
+              : holidayOfSelected.text }}
+          </Tag>
         </h3>
         <div class="flex gap-2">
           <Button v-if="isPastDay" size="mini" plain @click="goReport">日报</Button>
