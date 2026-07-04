@@ -11,6 +11,13 @@ export interface ChatMessageRow {
   created_at: number;
 }
 
+/**
+ * 删除/编辑等本地变更时插入一条 sentinel：
+ * 让 max(created_at) 自动变大，下次同步 PUSH 整表覆盖远端。
+ * 不参与显示，listMessagesByDate / rowTo 都会过滤。
+ */
+export const CHAT_UPDATED_SENTINEL = "__CHAT_UPDATED__";
+
 function uuid(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -50,6 +57,18 @@ export async function listMessagesByDate(date: Date): Promise<ChatMessageRow[]> 
   const db = await getDb();
   return db.select<ChatMessageRow[]>(
     `SELECT * FROM ${table} ORDER BY created_at ASC`
+  );
+}
+
+export async function deleteMessage(date: Date, id: string): Promise<void> {
+  const table = await ensureChatTable(date);
+  const db = await getDb();
+  await db.execute(`DELETE FROM ${table} WHERE id = $1`, [id]);
+  // 插入版本戳：让 max(created_at) 自动 bump，下次同步 PUSH 覆盖远端
+  await db.execute(
+    `INSERT INTO ${table} (id, role, content, model, tokens, attachments, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [uuid(), "system", CHAT_UPDATED_SENTINEL, "system", 0, "[]", Date.now()]
   );
 }
 

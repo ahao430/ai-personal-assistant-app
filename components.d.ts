@@ -11,6 +11,8 @@ declare module 'vue' {
     AppHeader: typeof import('./src/components/AppHeader.vue')['default']
     AsyncImage: typeof import('./src/components/AsyncImage.vue')['default']
     BottomTabBar: typeof import('./src/components/BottomTabBar.vue')['default']
+    ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
+    MarkdownRenderer: typeof import('./src/components/MarkdownRenderer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SideNav: typeof import('./src/components/SideNav.vue')['default']

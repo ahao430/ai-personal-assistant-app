@@ -36,4 +36,5 @@ export const KV_KEYS = {
   webdav: "webdav_config",
   signaling: "signaling_config",
   deviceId: "device_id",
+  weather: "weather_settings",
 } as const;

@@ -25,6 +25,7 @@ pub async fn generate_report(
         config: args.config.clone(),
         event_name: "report-internal".into(),
         timeout_secs: Some(180),
+        tools: None,
     };
     let _ = chat_args; // 占位
     // 直接复用 report::generate 走非流式调用

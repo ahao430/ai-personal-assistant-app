@@ -30,7 +30,7 @@ fn app_data_dir_resolve(app: tauri::AppHandle) -> Result<String, String> {
 async fn chat_send(
     app: tauri::AppHandle,
     args: llm::ChatSendArgs,
-) -> Result<String, String> {
+) -> Result<llm::ChatSendResult, String> {
     llm::run_chat_completion(app, args).await
 }
 

@@ -5,6 +5,11 @@ import { resolveImageUrl } from "@/api/asset";
 const props = defineProps<{
   path: string;
   remoteUrl?: string;
+  previewable?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "preview", src: string): void;
 }>();
 
 const src = ref("");
@@ -19,6 +24,12 @@ async function load() {
   src.value = await resolveImageUrl(props.path);
 }
 
+function onClick() {
+  if (props.previewable && src.value) {
+    emit("preview", src.value);
+  }
+}
+
 watch(() => props.path, load, { immediate: true });
 </script>
 
@@ -27,8 +38,10 @@ watch(() => props.path, load, { immediate: true });
     v-if="src && !failed"
     :src="src"
     class="block max-h-72 w-auto max-w-full"
+    :class="previewable ? 'cursor-zoom-in' : ''"
     alt="generated"
     @error="failed = true"
+    @click="onClick"
   />
   <div
     v-else-if="failed"

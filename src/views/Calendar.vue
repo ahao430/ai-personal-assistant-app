@@ -16,6 +16,7 @@ import {
 } from "vant";
 import { useEventStore } from "@/stores/event";
 import { useHolidays, type HolidayLabel } from "@/composables/useHolidays";
+import { getReport, getReportsRange, type DailyReportRow } from "@/api/report";
 import type { EventRow } from "@/db/repos";
 
 const store = useEventStore();
@@ -204,6 +205,62 @@ function goReport() {
   router.push({ path: "/reports", query: { date: selectedDateKey.value } });
 }
 
+// ----- 当日 / 当周日报 -----
+const dayReport = ref<DailyReportRow | null>(null);
+const weekReports = ref<DailyReportRow[]>([]);
+
+const weekRange = computed(() => {
+  const d = new Date(cursor.value.year, cursor.value.month - 1, selectedDay.value);
+  const weekday = d.getDay(); // 0=Sun
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    start: `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`,
+    end: `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`,
+    startLabel: `${monday.getMonth() + 1}/${monday.getDate()}`,
+    endLabel: `${sunday.getMonth() + 1}/${sunday.getDate()}`,
+  };
+});
+
+const weekSummary = computed(() => {
+  const list = weekReports.value;
+  if (!list.length) return null;
+  const done = list.reduce((s, r) => s + (r.todo_done ?? 0), 0);
+  const pending = list.reduce((s, r) => s + (r.todo_pending ?? 0), 0);
+  const events = list.reduce((s, r) => s + (r.events_count ?? 0), 0);
+  return {
+    days: list.length,
+    done,
+    pending,
+    events,
+    firstExcerpt: list[0]?.summary?.slice(0, 120) ?? "",
+  };
+});
+
+async function loadReports() {
+  dayReport.value = await getReport(selectedDateKey.value);
+  weekReports.value = await getReportsRange(weekRange.value.start, weekRange.value.end);
+}
+
+watch(
+  () => [cursor.value.year, cursor.value.month, selectedDay.value],
+  () => { loadReports(); },
+  { immediate: false }
+);
+
+onMounted(() => {
+  loadReports();
+});
+
+function fmtExcerpt(s: string, n = 140): string {
+  const t = (s ?? "").trim();
+  return t.length > n ? t.slice(0, n) + "…" : t;
+}
+
 const todayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
 function cellClass(year: number, month: number, day: number | null) {
   if (day == null) return "";
@@ -314,6 +371,54 @@ function cellClass(year: number, month: number, day: number | null) {
             <div v-if="e.location" class="text-xs text-gray-400">📍 {{ e.location }}</div>
           </template>
         </Cell>
+      </div>
+    </div>
+
+    <!-- 当日日报 -->
+    <div class="mt-2 px-3 pb-2">
+      <div class="rounded-2xl bg-white p-3 shadow-card ring-1 ring-stone-100">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+            <span>📋</span>
+            <span>当日日报</span>
+          </h3>
+          <Button size="mini" plain @click="goReport">
+            {{ dayReport ? "查看" : "生成" }}
+          </Button>
+        </div>
+        <div v-if="dayReport">
+          <p class="text-xs text-gray-500">{{ fmtExcerpt(dayReport.summary) }}</p>
+          <div class="mt-2 flex gap-3 text-[11px] text-gray-400">
+            <span>✓ 完成 {{ dayReport.todo_done }}</span>
+            <span>○ 待办 {{ dayReport.todo_pending }}</span>
+            <span>📅 事件 {{ dayReport.events_count }}</span>
+          </div>
+        </div>
+        <p v-else class="text-xs text-gray-400">这一天还没有日报</p>
+      </div>
+    </div>
+
+    <!-- 本周周报 -->
+    <div class="px-3 pb-4">
+      <div class="rounded-2xl bg-white p-3 shadow-card ring-1 ring-stone-100">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+            <span>📊</span>
+            <span>本周周报 · {{ weekRange.startLabel }} - {{ weekRange.endLabel }}</span>
+          </h3>
+        </div>
+        <div v-if="weekSummary">
+          <div class="flex gap-3 text-[11px] text-gray-500">
+            <span>📅 覆盖 {{ weekSummary.days }}/7 天</span>
+            <span>✓ 完成 {{ weekSummary.done }}</span>
+            <span>○ 待办 {{ weekSummary.pending }}</span>
+            <span>📋 事件 {{ weekSummary.events }}</span>
+          </div>
+          <p v-if="weekSummary.firstExcerpt" class="mt-2 text-xs text-gray-400">
+            {{ fmtExcerpt(weekSummary.firstExcerpt, 100) }}
+          </p>
+        </div>
+        <p v-else class="text-xs text-gray-400">本周还没有日报</p>
       </div>
     </div>
 

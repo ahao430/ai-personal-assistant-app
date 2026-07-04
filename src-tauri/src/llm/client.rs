@@ -1,7 +1,10 @@
-use crate::llm::types::{ChatMessage, LlmConfig, Role, StreamChunk};
+use crate::llm::types::{
+    ChatMessage, ChatSendResult, LlmConfig, Role, StreamChunk, ToolCallResult, ToolDefinition,
+};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::error::Error;
 use tauri::{AppHandle, Emitter};
 
 const SSE_DATA_PREFIX: &str = "data:";
@@ -19,6 +22,8 @@ pub struct ChatSendArgs {
     /// 单次超时（秒），默认 120
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub tools: Option<Vec<ToolDefinition>>,
 }
 
 #[derive(Serialize)]
@@ -28,6 +33,10 @@ struct OpenAiRequest<'a> {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<ToolDefinition>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -36,10 +45,37 @@ struct OpenAiMessage<'a> {
     content: &'a str,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+struct OpenAiToolCallFunction {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    arguments: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct OpenAiToolCallDelta {
+    #[serde(default)]
+    index: usize,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    function: Option<OpenAiToolCallFunction>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AccumulatedToolCall {
+    id: Option<String>,
+    name: String,
+    arguments: String,
+}
+
 #[derive(Deserialize)]
 struct OpenAiStreamDelta {
     #[serde(default)]
     content: Option<String>,
+    #[serde(default)]
+    tool_calls: Option<Vec<OpenAiToolCallDelta>>,
 }
 
 #[derive(Deserialize)]
@@ -72,12 +108,13 @@ fn build_client(timeout_secs: u64) -> reqwest::Result<reqwest::Client> {
 pub async fn run_chat_completion(
     app: AppHandle,
     args: ChatSendArgs,
-) -> Result<String, String> {
+) -> Result<ChatSendResult, String> {
     let ChatSendArgs {
         messages,
         config,
         event_name,
         timeout_secs,
+        tools,
     } = args;
 
     let base_url = config.base_url.trim_end_matches('/').to_string();
@@ -89,6 +126,7 @@ pub async fn run_chat_completion(
         .and_then(|v| v.as_f64())
         .map(|f| f as f32);
 
+    let has_tools = tools.as_ref().is_some_and(|t| !t.is_empty());
     let body = OpenAiRequest {
         model: &config.model,
         messages: messages
@@ -100,6 +138,8 @@ pub async fn run_chat_completion(
             .collect(),
         stream: true,
         temperature,
+        tools,
+        tool_choice: has_tools.then_some("auto"),
     };
 
     let client = build_client(timeout_secs.unwrap_or(120)).map_err(|e| e.to_string())?;
@@ -110,7 +150,7 @@ pub async fn run_chat_completion(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("请求失败: {e}"))?;
+        .map_err(|e| fmt_reqwest_err("请求失败", &e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -121,6 +161,7 @@ pub async fn run_chat_completion(
     let mut stream = resp.bytes_stream();
     let mut buf = String::new();
     let mut accumulated = String::new();
+    let mut tool_calls: Vec<AccumulatedToolCall> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("stream error: {e}"))?;
@@ -145,11 +186,17 @@ pub async fn run_chat_completion(
                             error: None,
                         },
                     );
-                    return Ok(accumulated);
+                    return Ok(ChatSendResult {
+                        content: accumulated,
+                        tool_calls: finish_tool_calls(tool_calls),
+                    });
                 }
                 if let Ok(parsed) = serde_json::from_str::<OpenAiStreamChunk>(payload) {
                     if let Some(choice) = parsed.choices.into_iter().next() {
                         if let Some(delta) = choice.delta {
+                            if let Some(tool_call_deltas) = delta.tool_calls {
+                                accumulate_tool_calls(&mut tool_calls, tool_call_deltas);
+                            }
                             if let Some(d) = delta.content {
                                 if !d.is_empty() {
                                     accumulated.push_str(&d);
@@ -181,7 +228,55 @@ pub async fn run_chat_completion(
             error: None,
         },
     );
-    Ok(accumulated)
+    Ok(ChatSendResult {
+        content: accumulated,
+        tool_calls: finish_tool_calls(tool_calls),
+    })
+}
+
+fn fmt_reqwest_err(prefix: &str, e: &reqwest::Error) -> String {
+    let mut out = format!("{prefix}: {e}");
+    let mut src: Option<&(dyn std::error::Error + 'static)> = e.source();
+    while let Some(s) = src {
+        out.push_str(&format!(" | {s}"));
+        src = s.source();
+    }
+    out
+}
+
+fn accumulate_tool_calls(
+    tool_calls: &mut Vec<AccumulatedToolCall>,
+    deltas: Vec<OpenAiToolCallDelta>,
+) {
+    for delta in deltas {
+        while tool_calls.len() <= delta.index {
+            tool_calls.push(AccumulatedToolCall::default());
+        }
+        let target = &mut tool_calls[delta.index];
+        if delta.id.is_some() {
+            target.id = delta.id;
+        }
+        if let Some(function) = delta.function {
+            if !function.name.is_empty() {
+                target.name.push_str(&function.name);
+            }
+            if !function.arguments.is_empty() {
+                target.arguments.push_str(&function.arguments);
+            }
+        }
+    }
+}
+
+fn finish_tool_calls(tool_calls: Vec<AccumulatedToolCall>) -> Vec<ToolCallResult> {
+    tool_calls
+        .into_iter()
+        .filter(|c| !c.name.trim().is_empty())
+        .map(|c| ToolCallResult {
+            id: c.id,
+            name: c.name,
+            args: serde_json::from_str(&c.arguments).unwrap_or_else(|_| Value::Object(Default::default())),
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]

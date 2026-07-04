@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
     meta: { tab: "settings", title: "画图模型" },
   },
   {
+    path: "/settings/weather",
+    name: "settings-weather",
+    component: () => import("@/views/Settings/Weather.vue"),
+    meta: { tab: "settings", title: "天气工具" },
+  },
+  {
     path: "/settings/sync",
     name: "settings-sync",
     component: () => import("@/views/Settings/Sync.vue"),

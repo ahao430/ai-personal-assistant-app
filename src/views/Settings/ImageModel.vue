@@ -59,6 +59,11 @@ async function remove(id: string) {
   <div>
     <AppHeader title="画图模型管理" show-back />
     <div class="p-3">
+      <div class="usage-tip">
+        <span class="tip-icon">💡</span>
+        <span>在「对话」中直接说"画一个…"即可调用此处配置的默认画图模型，无需切换页面。</span>
+      </div>
+
       <CellGroup v-if="store.configs.length && isDesktop" inset>
         <Cell
           v-for="c in store.configs"
@@ -182,5 +187,25 @@ async function remove(id: string) {
 .swipe-actions {
   display: flex;
   height: 100%;
+}
+
+.usage-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 4px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  color: #475569;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.tip-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.55;
 }
 </style>

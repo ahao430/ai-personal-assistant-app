@@ -28,6 +28,17 @@ export async function getReport(date: string): Promise<DailyReportRow | null> {
   return rows[0] ?? null;
 }
 
+export async function getReportsRange(
+  startDate: string,
+  endDate: string
+): Promise<DailyReportRow[]> {
+  const db = await getDb();
+  return db.select<DailyReportRow[]>(
+    "SELECT * FROM daily_reports WHERE date >= $1 AND date <= $2 ORDER BY date ASC",
+    [startDate, endDate]
+  );
+}
+
 export async function generateReport(
   date: string,
   config: LlmConfig

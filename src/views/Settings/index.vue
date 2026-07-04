@@ -8,8 +8,9 @@ import { useImageConfigStore } from "@/stores/image-config";
 import { useSyncStore } from "@/stores/sync";
 import { useThemeStore } from "@/stores/theme";
 import { useAppStore } from "@/stores/app";
+import { useWeatherSettingsStore } from "@/stores/weather-settings";
 
-const APP_VERSION = "0.0.4";
+const APP_VERSION = "0.0.5";
 
 const router = useRouter();
 const llm = useLlmConfigStore();
@@ -17,9 +18,10 @@ const img = useImageConfigStore();
 const sync = useSyncStore();
 const theme = useThemeStore();
 const app = useAppStore();
+const weather = useWeatherSettingsStore();
 
 onMounted(async () => {
-  await Promise.all([llm.reload(), img.reload(), sync.load()]);
+  await Promise.all([llm.reload(), img.reload(), sync.load(), weather.load()]);
 });
 
 function go(path: string) {
@@ -91,17 +93,26 @@ function formatTs(ts: number | null): string {
           is-link
           @click="go('/settings/llm')"
         />
-        <Cell
-          title="画图模型管理"
-          :value="img.defaultConfig?.name || '未配置'"
-          is-link
-          @click="go('/settings/image')"
-        />
         <Cell title="Agent 人设">
           <template #value>
             <span class="text-xs text-stone-400">敬请期待</span>
           </template>
         </Cell>
+      </CellGroup>
+
+      <CellGroup title="工具" inset>
+        <Cell
+          title="画图工具"
+          :value="img.defaultConfig?.name || '未配置'"
+          is-link
+          @click="go('/settings/image')"
+        />
+        <Cell
+          title="天气工具"
+          :value="weather.city || (weather.mode === 'gps' ? '已定位' : '未配置')"
+          is-link
+          @click="go('/settings/weather')"
+        />
       </CellGroup>
 
       <CellGroup title="同步与通知" inset>

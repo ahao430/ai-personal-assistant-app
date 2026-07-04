@@ -17,6 +17,21 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ToolCall {
+  id?: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
 export interface StreamChunk {
   delta: string;
   accumulated: string;
@@ -29,14 +44,20 @@ export interface ChatSendArgs {
   config: LlmConfig;
   eventName: string;
   timeoutSecs?: number;
+  tools?: ToolDefinition[];
+}
+
+export interface ChatSendResult {
+  content: string;
+  toolCalls: ToolCall[];
 }
 
 /**
- * 启动一次流式对话。返回值是最终完整文本（accumulated）。
+ * 启动一次流式对话。返回值包含最终文本和模型发起的标准工具调用。
  * 调用方应先 listen(onChunk, onError)，再 await 此函数。
  */
-export async function chatSend(args: ChatSendArgs): Promise<string> {
-  return invoke<string>("chat_send", { args });
+export async function chatSend(args: ChatSendArgs): Promise<ChatSendResult | string> {
+  return invoke<ChatSendResult | string>("chat_send", { args });
 }
 
 /** 从 API 获取可用模型列表 */

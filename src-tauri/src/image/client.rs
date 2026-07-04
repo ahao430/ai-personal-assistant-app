@@ -1,5 +1,6 @@
 use crate::image::types::ImageGenArgs;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
@@ -11,7 +12,6 @@ struct OpenAiImageRequest<'a> {
     size: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     quality: Option<&'a str>,
-    response_format: &'a str,
 }
 
 #[derive(Deserialize)]
@@ -73,11 +73,11 @@ pub async fn run_image_generation(
         n,
         size: &size,
         quality: quality.as_deref(),
-        response_format: "b64_json",
     };
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_secs(180))
+        .http1_only()
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -87,8 +87,7 @@ pub async fn run_image_generation(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("请求失败: {e}"))?;
-
+        .map_err(|e| fmt_reqwest_err("请求失败", &e))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
@@ -149,6 +148,16 @@ pub async fn run_image_generation(
         return Err("服务返回空数据".into());
     }
     Ok(results)
+}
+
+fn fmt_reqwest_err(prefix: &str, e: &reqwest::Error) -> String {
+    let mut out = format!("{prefix}: {e}");
+    let mut src: Option<&dyn std::error::Error> = e.source();
+    while let Some(s) = src {
+        out.push_str(&format!(" | {s}"));
+        src = s.source();
+    }
+    out
 }
 
 /// 内嵌 base64 解码，避免引一个新 crate（用 `base64` 也行，这里手写最小实现）。

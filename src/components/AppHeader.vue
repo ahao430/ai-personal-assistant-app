@@ -49,7 +49,10 @@ function onBack() {
         <path d="M15 6l-6 6 6 6" />
       </svg>
     </button>
-    <h1 class="flex-1 px-1 text-base font-semibold text-stone-800">{{ title }}</h1>
+    <div class="flex flex-1 items-center gap-1 px-1 min-w-0">
+      <h1 class="text-base font-semibold text-stone-800">{{ title }}</h1>
+      <slot name="title-suffix" />
+    </div>
     <button
       v-if="showSync"
       class="flex h-9 w-9 items-center justify-center rounded-full text-brand-600 transition active:bg-brand-50"
