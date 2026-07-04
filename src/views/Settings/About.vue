@@ -5,7 +5,7 @@ import { Cell, CellGroup, Button, showConfirmDialog, showToast } from "vant";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 // 同步更新：package.json / Cargo.toml / tauri.conf.json 都需要改
-const APP_VERSION = "0.0.6";
+const APP_VERSION = "0.0.7";
 const REPO_OWNER = "ahao430";
 const REPO_NAME = "ai-personal-assistant-app";
 const REPO_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;

@@ -2,12 +2,19 @@
 
 Tauri + Vue 3 实现的个人助手应用，支持会话、待办、日程、日报、模型配置、画图、WebDAV 备份同步和 Cloudflare Workers 信令。
 
+## v0.0.7 更新
+
+### 安卓
+
+- 修复 debug 签名每次 CI 随机变化导致无法覆盖升级的问题：仓库内置固定 `debug.keystore`，CI 构建前安装到 `~/.android/debug.keystore`，gradle 默认 debug 签名自动复用同一份证书。
+- 后续 debug 版本可以无缝覆盖升级，无需卸载重装。
+- 后续若要正式分发（应用商店），需要自签 release keystore 并接入 CI signing 流程。
+
 ## v0.0.6 更新
 
 ### 安卓
 
 - 修复安卓 APK 无法安装（"解析软件包时出现问题"）的问题：CI 改用 debug 签名构建，跳过未配置 keystore 的限制。
-- 后续若要正式分发，需要自签 keystore 并接入 CI signing 流程。
 
 ## v0.0.5 更新
 
