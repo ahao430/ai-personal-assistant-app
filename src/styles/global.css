@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fallback brand palette (teal). Overwritten at runtime by themeStore. */
+:root {
+  --brand-50: 240 253 250;
+  --brand-100: 204 251 241;
+  --brand-200: 153 246 228;
+  --brand-300: 94 234 212;
+  --brand-400: 45 212 191;
+  --brand-500: 20 184 166;
+  --brand-600: 13 148 136;
+  --brand-700: 15 118 110;
+  --brand-800: 17 94 89;
+  --brand-900: 19 78 74;
+
+  /* Vant primary → 跟随主题色 */
+  --van-primary-color: rgb(var(--brand-600));
+  --van-button-primary-background: rgb(var(--brand-600));
+  --van-button-primary-border-color: rgb(var(--brand-600));
+  --van-switch-on-background: rgb(var(--brand-500));
+  --van-checkbox-checked-icon-color: rgb(var(--brand-600));
+  --van-radio-checked-icon-color: rgb(var(--brand-600));
+  --van-tab-active-text-color: rgb(var(--brand-600));
+  --van-tabs-bottom-bar-color: rgb(var(--brand-600));
+  --van-calendar-selected-day-background-color: rgb(var(--brand-600));
+  --van-calendar-range-edge-background-color: rgb(var(--brand-100));
+  --van-calendar-day-title-color: rgb(var(--brand-600));
+  --van-picker-confirm-action-color: rgb(var(--brand-600));
+  --van-picker-option-selected-color: rgb(var(--brand-600));
+  --van-pagination-active-background-color: rgb(var(--brand-600));
+  --van-sidebar-selected-border-color: rgb(var(--brand-600));
+  --van-step-finish-line-background-color: rgb(var(--brand-500));
+  --van-step-finish-text-color: rgb(var(--brand-600));
+  --van-tree-select-item-active-color: rgb(var(--brand-600));
+  --van-dropdown-menu-title-active-text-color: rgb(var(--brand-600));
+  --van-dropdown-item-option-active-color: rgb(var(--brand-600));
+  --van-floating-bubble-background: rgb(var(--brand-600));
+  --van-notice-bar-background: rgb(var(--brand-50));
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}

@@ -1,0 +1,23 @@
+name = "ai-assistant-signaling"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Durable Object 绑定：维护"房间"内的设备 WebSocket 连接
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomObject"
+
+# DO 的迁移
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomObject"]
+
+# 限流：单人单房间，10 个连接足够
+# 免费额度：100k req/day, 1M WS msg/month
+
+# 部署：
+# 1) pnpm install
+# 2) npx wrangler login
+# 3) pnpm deploy
+# 4) 拿到 https://ai-assistant-signaling.<your-subdomain>.workers.dev
+# 5) App 设置页填入：wss://ai-assistant-signaling.<...>.workers.dev/ws?device=<deviceId>
