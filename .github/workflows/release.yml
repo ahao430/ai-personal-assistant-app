@@ -84,8 +84,6 @@ jobs:
   # ============ Android ============
   build-android:
     runs-on: ubuntu-22.04
-    env:
-      NDK_VERSION: "27.0.12075907"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -107,13 +105,21 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            ndk;${{ env.NDK_VERSION }}
+      - name: Resolve pre-installed NDK
+        id: ndk
+        run: |
+          # ubuntu-22.04 runner 预装了多个 NDK，挑一个 27.x
+          NDK_DIR=$(ls -d "${ANDROID_HOME}/ndk/27."* 2>/dev/null | head -1 || true)
+          if [ -z "$NDK_DIR" ]; then
+            NDK_DIR=$(ls -d "${ANDROID_HOME}/ndk/"* 2>/dev/null | head -1)
+          fi
+          if [ -z "$NDK_DIR" ]; then
+            echo "No NDK found under $ANDROID_HOME/ndk/" >&2
+            ls -la "${ANDROID_HOME}/ndk/" >&2 || true
+            exit 1
+          fi
+          echo "ndk_home=$NDK_DIR" >> "$GITHUB_OUTPUT"
+          echo "Using NDK: $NDK_DIR"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -136,12 +142,12 @@ jobs:
       - name: Init Android project
         run: pnpm tauri android init
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 
       - name: Build Android APK
         run: pnpm tauri android build --apk
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
