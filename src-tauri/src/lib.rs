@@ -129,6 +129,47 @@ async fn image_gen(
     image::run_image_generation(app, args).await
 }
 
+/// 把用户选的任意图片路径复制到 app_data_dir/images/imported/ 下，
+/// 返回复制后的绝对路径。用于会话背景图等场景：
+/// - 桌面端 convertFileSrc 也能访问任意路径，但统一存放便于管理；
+/// - Android 端 tauri-plugin-dialog 选图返回的多是 cache 临时路径，
+///   会被系统清理；同时部分机型返回 content:// URI，tokio::fs::read 读不到。
+///   复制到 app_data_dir 内可彻底避开这两类问题。
+#[tauri::command]
+async fn import_user_image(app: tauri::AppHandle, src: String) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let imported_dir = dir.join("images").join("imported");
+    std::fs::create_dir_all(&imported_dir).map_err(|e| format!("mkdir: {e}"))?;
+
+    let lower = src.to_lowercase();
+    let ext = if lower.ends_with(".png") {
+        "png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "jpg"
+    } else if lower.ends_with(".webp") {
+        "webp"
+    } else if lower.ends_with(".gif") {
+        "gif"
+    } else if lower.ends_with(".bmp") {
+        "bmp"
+    } else {
+        "png"
+    };
+
+    let id = uuid::Uuid::new_v4().simple();
+    let filename = format!("bg_{id}.{ext}");
+    let dest = imported_dir.join(&filename);
+
+    let bytes = tokio::fs::read(&src)
+        .await
+        .map_err(|e| format!("read src {:?}: {e}", src))?;
+
+    std::fs::write(&dest, &bytes).map_err(|e| format!("write dest: {e}"))?;
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 async fn signaling_start(app: tauri::AppHandle, cfg: SignalingConfig) -> Result<(), String> {
     sync::signaling::spawn_signaling_loop(app, cfg);
@@ -148,6 +189,7 @@ pub fn run() {
             greet,
             app_data_dir_resolve,
             fetch_as_data_url,
+            import_user_image,
             chat_send,
             list_models,
             image_gen,

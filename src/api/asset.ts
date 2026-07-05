@@ -25,18 +25,16 @@ function isAndroid(): boolean {
  * Android WebView 对 Tauri 的 asset 协议（asset://localhost 或
  * http://asset.localhost）拦截不稳定，所以 Android 上改成调用 Rust 命令
  * 把文件直接读成 data URL 返回。桌面端仍走 convertFileSrc 以避免 IPC 开销。
+ *
+ * 失败时抛错（不 swallow），调用方可以拿到错误信息展示给用户。
  */
 export async function resolveAbsoluteImageUrl(absPath: string): Promise<string> {
   if (!absPath) return "";
   if (/^(https?:|data:|asset:|blob:)/.test(absPath)) return absPath;
   if (isAndroid()) {
-    try {
-      const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: absPath });
-      if (dataUrl) return dataUrl;
-    } catch (e) {
-      console.warn("fetch_as_data_url failed:", e);
-    }
-    return "";
+    const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: absPath });
+    if (!dataUrl) throw new Error("Rust 返回空 data URL");
+    return dataUrl;
   }
   return convertFileSrc(absPath);
 }

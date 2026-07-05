@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import { Button, Cell, CellGroup, Slider, showToast } from "vant";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import {
   useChatBackgroundStore,
   type ChatBgSizeMode,
@@ -11,6 +12,7 @@ import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const store = useChatBackgroundStore();
 const { isDesktop } = useLayoutMode();
+const importing = ref(false);
 
 const PRESET_COLORS = [
   "#0d9488",
@@ -66,17 +68,30 @@ const previewBgClass = computed(() => {
 });
 
 async function pickImage(target: "desktop" | "mobile") {
+  if (importing.value) return;
   try {
     const selected = await open({
       multiple: false,
       filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
     });
-    if (typeof selected === "string" && selected) {
-      store.setImage(selected, target);
-      showToast("已选择图片");
+    if (typeof selected !== "string" || !selected) return;
+
+    importing.value = true;
+    // 把图片复制到 app_data_dir/images/imported/：
+    // 1. 统一存放，避免 cache 临时路径被 Android 系统清理
+    // 2. 规避 Android 上 content:// URI 读不到的问题
+    let finalPath = selected;
+    try {
+      finalPath = await invoke<string>("import_user_image", { src: selected });
+    } catch (e) {
+      console.warn("import_user_image failed, fallback to raw path:", e);
     }
+    store.setImage(finalPath, target);
+    showToast("已选择图片");
   } catch (e) {
     showToast("选择图片失败：" + String(e));
+  } finally {
+    importing.value = false;
   }
 }
 
