@@ -57,7 +57,14 @@ async function onImgError() {
     } catch { /* fall through to error display */ }
   }
   failed.value = true;
-  if (!errorMsg.value) errorMsg.value = "<img> 加载触发 error 事件";
+  if (!errorMsg.value) {
+    const srcPreview = src.value
+      ? src.value.length > 120
+        ? src.value.slice(0, 80) + "..." + src.value.slice(-30)
+        : src.value
+      : "(空)";
+    errorMsg.value = `<img> error | src: ${srcPreview}`;
+  }
 }
 
 function onClick() {
