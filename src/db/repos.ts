@@ -324,7 +324,7 @@ export async function upsertEvent(
       row.description ?? "",
       row.start_at,
       row.end_at ?? null,
-      row.all_day ?? 0,
+      row.all_day ? 1 : 0,
       row.location ?? "",
       row.recurrence ?? "",
       row.created_at ?? ts,

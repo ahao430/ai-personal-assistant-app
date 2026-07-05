@@ -124,7 +124,7 @@ pub async fn generate_daily_report(
             .timestamp_millis();
         let day_end = day_start + 86_400_000;
         let mut stmt = conn
-            .prepare("SELECT title, start_at, all_day FROM events WHERE start_at >= ?1 AND start_at < ?2 ORDER BY start_at")
+            .prepare("SELECT title, start_at, CAST(all_day AS INTEGER) AS all_day FROM events WHERE start_at >= ?1 AND start_at < ?2 ORDER BY start_at")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(rusqlite::params![day_start, day_end], |r| {

@@ -85,6 +85,11 @@ export const BASE_SCHEMA = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+
+  // 数据清洗：之前 Vant Switch 直接 v-model 把 all_day 写成 boolean true/false，
+  // 经 tauri-plugin-sql 进 SQLite 后变 TEXT 'true'/'false'，导致 Rust 读 i64 崩。
+  // 幂等：INTEGER 1/0 → 1/0，TEXT 'true'/'false' → 1/0。
+  `UPDATE events SET all_day = CASE WHEN CAST(all_day AS INTEGER) != 0 THEN 1 ELSE 0 END`,
 ];
 
 export const CHAT_TABLE_PREFIX = "chat_";
