@@ -3,7 +3,6 @@ import { computed, ref } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import { Button, Cell, CellGroup, Slider, showToast } from "vant";
 import { open } from "@tauri-apps/plugin-dialog";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   useChatBackgroundStore,
   type ChatBgSizeMode,
@@ -33,8 +32,8 @@ const SIZE_MODES: { value: ChatBgSizeMode; label: string; hint: string }[] = [
 
 const pickerOpen = ref(false);
 
-const previewImagePath = computed(
-  () => (isDesktop.value ? store.imagePathDesktop : store.imagePathMobile) || ""
+const previewImageUrl = computed(
+  () => (isDesktop.value ? store.resolvedDesktopUrl : store.resolvedMobileUrl) || ""
 );
 
 const previewStyle = computed<Record<string, string>>(() => {
@@ -43,8 +42,8 @@ const previewStyle = computed<Record<string, string>>(() => {
   if (store.type === "color") {
     base["background-color"] = store.color;
     base["opacity"] = String(opacity);
-  } else if (store.type === "image" && previewImagePath.value) {
-    base["background-image"] = `url("${convertFileSrc(previewImagePath.value)}")`;
+  } else if (store.type === "image" && previewImageUrl.value) {
+    base["background-image"] = `url("${previewImageUrl.value}")`;
     base["opacity"] = String(opacity);
     if (store.blur > 0) base["filter"] = `blur(${store.blur}px)`;
   }
@@ -153,7 +152,7 @@ function selectMode(m: "none" | "image" | "color") {
         </Cell>
       </CellGroup>
 
-      <CellGroup v-if="store.type === 'image' && previewImagePath" inset title="尺寸模式">
+      <CellGroup v-if="store.type === 'image' && previewImageUrl" inset title="尺寸模式">
         <div class="grid grid-cols-2 gap-2 p-2">
           <button
             v-for="m in SIZE_MODES"

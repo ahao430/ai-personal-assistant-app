@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { domToBlob } from "modern-screenshot";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import AppHeader from "@/components/AppHeader.vue";
 import AsyncImage from "@/components/AsyncImage.vue";
 import ImagePreview from "@/components/ImagePreview.vue";
@@ -58,14 +58,14 @@ const activeConfigLabel = computed(() => llm.defaultConfig?.name ?? "未配置")
 
 const bgEnabled = computed(() => chatBg.type !== "none");
 
-const activeImagePath = computed(
-  () => (isDesktop.value ? chatBg.imagePathDesktop : chatBg.imagePathMobile) || ""
+const activeImageUrl = computed(
+  () => (isDesktop.value ? chatBg.resolvedDesktopUrl : chatBg.resolvedMobileUrl) || ""
 );
 
 const bgImageStyle = computed<Record<string, string>>(() => {
-  if (chatBg.type !== "image" || !activeImagePath.value) return {};
+  if (chatBg.type !== "image" || !activeImageUrl.value) return {};
   const map: Record<string, string> = {
-    "background-image": `url("${convertFileSrc(activeImagePath.value)}")`,
+    "background-image": `url("${activeImageUrl.value}")`,
     opacity: String(Math.max(0, Math.min(1, chatBg.opacity / 100))),
   };
   if (chatBg.blur > 0) map["filter"] = `blur(${chatBg.blur}px)`;

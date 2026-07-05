@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
+import { resolveAbsoluteImageUrl } from "@/api/asset";
 
 export type ChatBgType = "none" | "image" | "color";
 export type ChatBgSizeMode = "stretch" | "cover" | "contain" | "repeat";
@@ -58,6 +59,11 @@ export const useChatBackgroundStore = defineStore("chat-background", () => {
   const sizeMode = ref<ChatBgSizeMode>(initial.sizeMode);
   const blur = ref<number>(initial.blur);
 
+  // 异步解析后的 URL：桌面端 = convertFileSrc 结果；Android = data URL。
+  // <img>/background-image 不能直接吃 async，所以预先解析好缓存到这里。
+  const resolvedDesktopUrl = ref<string>("");
+  const resolvedMobileUrl = ref<string>("");
+
   function persist() {
     if (typeof localStorage === "undefined") return;
     const snapshot: ChatBackgroundState = {
@@ -72,9 +78,22 @@ export const useChatBackgroundStore = defineStore("chat-background", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }
 
+  async function refreshDesktop() {
+    resolvedDesktopUrl.value = imagePathDesktop.value
+      ? await resolveAbsoluteImageUrl(imagePathDesktop.value)
+      : "";
+  }
+  async function refreshMobile() {
+    resolvedMobileUrl.value = imagePathMobile.value
+      ? await resolveAbsoluteImageUrl(imagePathMobile.value)
+      : "";
+  }
+
   watch([type, imagePathDesktop, imagePathMobile, color, opacity, sizeMode, blur], persist, {
     deep: true,
   });
+  watch(imagePathDesktop, refreshDesktop, { immediate: true });
+  watch(imagePathMobile, refreshMobile, { immediate: true });
 
   function setImage(path: string, target: "desktop" | "mobile") {
     if (target === "desktop") imagePathDesktop.value = path;
@@ -100,6 +119,8 @@ export const useChatBackgroundStore = defineStore("chat-background", () => {
     type,
     imagePathDesktop,
     imagePathMobile,
+    resolvedDesktopUrl,
+    resolvedMobileUrl,
     color,
     opacity,
     sizeMode,

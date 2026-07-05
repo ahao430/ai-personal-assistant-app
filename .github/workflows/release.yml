@@ -143,6 +143,11 @@ jobs:
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 
+      - name: Override default Tauri launcher icons with custom icons
+        run: |
+          # tauri android init 模板里默认 mipmap-* 是 Tauri 默认图标，必须显式覆盖
+          cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+
       - name: Inject signing config & ABI splits
         run: |
           cp .github/android/debug.keystore src-tauri/gen/android/app/keystore.keystore

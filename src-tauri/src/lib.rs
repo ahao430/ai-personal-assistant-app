@@ -26,8 +26,8 @@ fn app_data_dir_resolve(app: tauri::AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
-/// 把任意图片 URL（远程 http/https 或 Tauri asset 协议）转成 data URL，
-/// 让 html2canvas 能不带 CORS 限制地渲染。
+/// 把任意图片 URL（远程 http/https / Tauri asset 协议 / 本地绝对路径）转成 data URL，
+/// 让 html2canvas 能不带 CORS 限制地渲染，并绕过 Android WebView 对 asset 协议的不稳定拦截。
 #[tauri::command]
 async fn fetch_as_data_url(url: String) -> Result<Option<String>, String> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -47,7 +47,12 @@ async fn fetch_as_data_url(url: String) -> Result<Option<String>, String> {
         let bytes = res.bytes().await.map_err(|e| format!("read: {e}"))?.to_vec();
         (mime, bytes)
     } else {
-        let path = extract_asset_path(&url).ok_or_else(|| format!("unsupported url: {}", url))?;
+        // 支持绝对路径，或 asset://localhost/<encoded> / http://asset.localhost/<encoded>
+        let path = if url.starts_with('/') {
+            url.clone()
+        } else {
+            extract_asset_path(&url).ok_or_else(|| format!("unsupported url: {}", url))?
+        };
         let bytes = tokio::fs::read(&path)
             .await
             .map_err(|e| format!("read file {:?}: {e}", path))?;
