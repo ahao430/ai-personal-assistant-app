@@ -6,7 +6,7 @@ import { showToast } from "vant";
 import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { imageEdit, imageGen, optimizeImagePrompt, type ImageConfig, type ImageGenResult } from "@/api/image";
+import { imageEdit, imageGen, optimizeImagePrompt, deleteImageFile, type ImageConfig, type ImageGenResult } from "@/api/image";
 import { useImageConfigStore } from "@/stores/image-config";
 import { useLlmConfigStore } from "@/stores/llm-config";
 import { useLayoutMode } from "@/composables/useLayoutMode";
@@ -244,6 +244,27 @@ function onPreview(src: string, srcs: string[]) {
   previewVisible.value = true;
 }
 
+async function onDelete(items: ImageGenResult[]) {
+  const ok = new Set<string>();
+  const failed: string[] = [];
+  for (const it of items) {
+    try {
+      await deleteImageFile(it.path);
+      ok.add(it.path);
+    } catch {
+      failed.push(it.path);
+    }
+  }
+  if (ok.size) {
+    results.value = results.value.filter((r) => !ok.has(r.path));
+  }
+  if (failed.length) {
+    showToast(`${ok.size} 张已删除，${failed.length} 张文件删除失败`);
+  } else {
+    showToast(`已删除 ${ok.size} 张`);
+  }
+}
+
 async function onSaveImage(src: string) {
   try {
     const bytes = await fetchBytesForSave(src);
@@ -341,7 +362,7 @@ function bytesToBase64(bytes: Uint8Array): string {
         />
       </div>
       <div class="flex-1">
-        <Results :results="results" @preview="onPreview" />
+        <Results :results="results" @preview="onPreview" @delete="onDelete" />
       </div>
     </div>
 
@@ -371,7 +392,7 @@ function bytesToBase64(bytes: Uint8Array): string {
         @clear-ref="clearRef"
         @generate="generate"
       />
-      <Results :results="results" @preview="onPreview" />
+      <Results :results="results" @preview="onPreview" @delete="onDelete" />
 
       <input
         ref="mobileFileInput"

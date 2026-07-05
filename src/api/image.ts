@@ -44,3 +44,7 @@ export function imageEdit(args: ImageEditArgs): Promise<ImageGenResult[]> {
 export function optimizeImagePrompt(idea: string, config: LlmConfig): Promise<string> {
   return invoke<string>("optimize_image_prompt", { args: { idea, config } });
 }
+
+export function deleteImageFile(relPath: string): Promise<void> {
+  return invoke<void>("delete_image_file", { relPath });
+}

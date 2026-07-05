@@ -194,6 +194,21 @@ async fn optimize_image_prompt(args: OptimizePromptArgs) -> Result<String, Strin
     Ok(content)
 }
 
+/// 删除 app_data_dir/images/<rel_path> 下的图片文件。
+/// 用于画图结果列表的删除（同时清掉本地文件，避免孤儿文件累积）。
+#[tauri::command]
+async fn delete_image_file(app: tauri::AppHandle, rel_path: String) -> Result<(), String> {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let full = dir.join("images").join(&rel_path);
+    if full.exists() {
+        tokio::fs::remove_file(&full)
+            .await
+            .map_err(|e| format!("delete {:?}: {e}", full))?;
+    }
+    Ok(())
+}
+
 /// 把用户选的任意图片路径复制到 app_data_dir/images/imported/ 下，
 /// 返回**相对路径**（如 `imported/bg_xxx.png`），相对路径会随 sync_images 同步到
 /// 其他设备，跨设备通用。
@@ -312,6 +327,7 @@ pub fn run() {
             fetch_as_data_url,
             import_user_image,
             save_image_data_url,
+            delete_image_file,
             chat_send,
             list_models,
             image_gen,
