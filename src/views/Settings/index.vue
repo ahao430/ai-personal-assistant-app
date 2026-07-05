@@ -9,8 +9,9 @@ import { useSyncStore } from "@/stores/sync";
 import { useThemeStore } from "@/stores/theme";
 import { useAppStore } from "@/stores/app";
 import { useWeatherSettingsStore } from "@/stores/weather-settings";
+import { useChatBackgroundStore } from "@/stores/chat-background";
 
-const APP_VERSION = "0.0.9";
+const APP_VERSION = "0.0.10";
 
 const router = useRouter();
 const llm = useLlmConfigStore();
@@ -19,6 +20,7 @@ const sync = useSyncStore();
 const theme = useThemeStore();
 const app = useAppStore();
 const weather = useWeatherSettingsStore();
+const chatBg = useChatBackgroundStore();
 
 onMounted(async () => {
   await Promise.all([llm.reload(), img.reload(), sync.load(), weather.load()]);
@@ -85,6 +87,15 @@ function formatTs(ts: number | null): string {
           </button>
         </div>
       </section>
+
+      <CellGroup title="外观" inset>
+        <Cell
+          title="对话背景"
+          :value="chatBg.type === 'image' ? '图片' : chatBg.type === 'color' ? '纯色' : '默认'"
+          is-link
+          @click="go('/settings/chat-background')"
+        />
+      </CellGroup>
 
       <CellGroup title="AI" inset>
         <Cell

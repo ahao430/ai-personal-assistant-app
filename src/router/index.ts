@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     meta: { tab: "settings", title: "天气工具" },
   },
   {
+    path: "/settings/chat-background",
+    name: "settings-chat-background",
+    component: () => import("@/views/Settings/ChatBackground.vue"),
+    meta: { tab: "settings", title: "对话背景" },
+  },
+  {
     path: "/settings/sync",
     name: "settings-sync",
     component: () => import("@/views/Settings/Sync.vue"),

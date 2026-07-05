@@ -13,6 +13,7 @@ declare module 'vue' {
     BottomTabBar: typeof import('./src/components/BottomTabBar.vue')['default']
     ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     MarkdownRenderer: typeof import('./src/components/MarkdownRenderer.vue')['default']
+    MonthCalendar: typeof import('./src/components/MonthCalendar.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SideNav: typeof import('./src/components/SideNav.vue')['default']

@@ -147,7 +147,7 @@ jobs:
         run: |
           cp .github/android/debug.keystore src-tauri/gen/android/app/keystore.keystore
           cp .github/android/customizations.gradle src-tauri/gen/android/app/customizations.gradle
-          printf '\napply from: "customizations.gradle"\n' >> src-tauri/gen/android/app/build.gradle.kts
+          printf '\napply(from = "customizations.gradle")\n' >> src-tauri/gen/android/app/build.gradle.kts
 
       - name: Build Android APK
         run: pnpm tauri android build --apk

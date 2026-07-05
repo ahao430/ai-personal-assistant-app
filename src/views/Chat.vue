@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { domToBlob } from "modern-screenshot";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import AppHeader from "@/components/AppHeader.vue";
 import AsyncImage from "@/components/AsyncImage.vue";
 import ImagePreview from "@/components/ImagePreview.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
 import { Button, Empty, Icon, showToast } from "vant";
-import { useChatStore, TOOL_LABELS, type Attachment } from "@/stores/chat";
+import { useChatStore, TOOL_LABELS, type Attachment, type LocalMessage } from "@/stores/chat";
 import { useLlmConfigStore } from "@/stores/llm-config";
+import { useChatBackgroundStore } from "@/stores/chat-background";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const chat = useChatStore();
 const llm = useLlmConfigStore();
 const router = useRouter();
+const chatBg = useChatBackgroundStore();
+const { isDesktop } = useLayoutMode();
 
 const input = ref("");
 const scroller = ref<HTMLElement | null>(null);
@@ -47,6 +55,51 @@ const canSend = computed(
 );
 
 const activeConfigLabel = computed(() => llm.defaultConfig?.name ?? "未配置");
+
+const bgEnabled = computed(() => chatBg.type !== "none");
+
+const activeImagePath = computed(
+  () => (isDesktop.value ? chatBg.imagePathDesktop : chatBg.imagePathMobile) || ""
+);
+
+const bgImageStyle = computed<Record<string, string>>(() => {
+  if (chatBg.type !== "image" || !activeImagePath.value) return {};
+  const map: Record<string, string> = {
+    "background-image": `url("${convertFileSrc(activeImagePath.value)}")`,
+    opacity: String(Math.max(0, Math.min(1, chatBg.opacity / 100))),
+  };
+  if (chatBg.blur > 0) map["filter"] = `blur(${chatBg.blur}px)`;
+  switch (chatBg.sizeMode) {
+    case "cover":
+      map["background-size"] = "cover";
+      map["background-position"] = "center";
+      map["background-repeat"] = "no-repeat";
+      break;
+    case "contain":
+      map["background-size"] = "contain";
+      map["background-position"] = "center";
+      map["background-repeat"] = "no-repeat";
+      break;
+    case "stretch":
+      map["background-size"] = "100% 100%";
+      map["background-position"] = "center";
+      map["background-repeat"] = "no-repeat";
+      break;
+    case "repeat":
+      map["background-size"] = "auto";
+      map["background-repeat"] = "repeat";
+      break;
+  }
+  return map;
+});
+
+const bgColorStyle = computed<Record<string, string>>(() => {
+  if (chatBg.type !== "color") return {} as Record<string, string>;
+  return {
+    "background-color": chatBg.color,
+    opacity: String(Math.max(0, Math.min(1, chatBg.opacity / 100))),
+  };
+});
 
 async function send(text?: string) {
   const content = (text ?? input.value).trim();
@@ -128,6 +181,245 @@ function openPreview(src: string) {
 function closePreview() {
   previewVisible.value = false;
 }
+
+// ============ 选择 / 导出 ============
+const selectionMode = ref(false);
+const selectedIds = ref<Set<string>>(new Set());
+
+const exporting = ref(false);
+
+let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+let pointerStart: { x: number; y: number } | null = null;
+
+function isSelectable(m: LocalMessage): boolean {
+  return !m.pivot && !m.streaming;
+}
+
+function startSelection(messageId: string) {
+  selectionMode.value = true;
+  selectedIds.value = new Set([messageId]);
+}
+
+function toggleSelection(messageId: string) {
+  if (!selectionMode.value) return;
+  const next = new Set(selectedIds.value);
+  if (next.has(messageId)) {
+    next.delete(messageId);
+  } else {
+    next.add(messageId);
+  }
+  selectedIds.value = next;
+}
+
+function exitSelection() {
+  selectionMode.value = false;
+  selectedIds.value = new Set();
+}
+
+function onMessageClick(m: LocalMessage) {
+  if (!selectionMode.value) return;
+  if (!isSelectable(m)) return;
+  toggleSelection(m.id);
+}
+
+function onContextMenu(e: MouseEvent, m: LocalMessage) {
+  if (!isSelectable(m)) return;
+  e.preventDefault();
+  if (selectionMode.value) {
+    toggleSelection(m.id);
+  } else {
+    startSelection(m.id);
+  }
+}
+
+function onPointerDown(e: PointerEvent, m: LocalMessage) {
+  if (selectionMode.value) return;
+  if (!isSelectable(m)) return;
+  if (e.pointerType !== "touch") return;
+  pointerStart = { x: e.clientX, y: e.clientY };
+  longPressTimer = setTimeout(() => {
+    startSelection(m.id);
+    pointerStart = null;
+    longPressTimer = undefined;
+  }, 500);
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!pointerStart) return;
+  const dx = e.clientX - pointerStart.x;
+  const dy = e.clientY - pointerStart.y;
+  if (Math.hypot(dx, dy) > 10) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = undefined;
+    }
+    pointerStart = null;
+  }
+}
+
+function onPointerUp() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = undefined;
+  }
+  pointerStart = null;
+}
+
+function bubbleClasses(m: LocalMessage): string {
+  return m.role === "user"
+    ? "rounded-br-md bg-brand-500 text-white"
+    : "rounded-bl-md bg-white text-gray-900";
+}
+
+function buildMarkdown(messages: LocalMessage[]): string {
+  return messages.map((m) => {
+    const role = m.role === "user" ? "用户" : m.role === "assistant" ? "助手" : m.role;
+    let body = m.content;
+    if (m.attachments.length) {
+      const atts = m.attachments.map((a) => {
+        if (a.type === "image") {
+          return a.remoteUrl ? `![](${a.remoteUrl})` : `![本地图片]`;
+        }
+        if (a.type === "tool") {
+          const head = `**🔧 ${toolLabel(a.name)}**`;
+          const args = `\n\n参数：\n\n\`\`\`json\n${prettyArgs(a.args)}\n\`\`\``;
+          const tail = a.result ? `\n\n结果：\n\n${a.result}` : "";
+          return head + args + tail;
+        }
+        if (a.type === "error") return `> ⚠️ ${a.message}`;
+        return "";
+      }).filter(Boolean).join("\n\n");
+      if (atts) body = body + "\n\n" + atts;
+    }
+    return `## ${role}\n\n${body}`;
+  }).join("\n\n---\n\n");
+}
+
+async function inlineImages(container: HTMLElement): Promise<void> {
+  const imgs = Array.from(container.querySelectorAll<HTMLImageElement>("img"));
+  if (!imgs.length) return;
+
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.src;
+      if (!src || src.startsWith("data:")) return;
+
+      try {
+        const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: src });
+        if (!dataUrl) return;
+        img.src = dataUrl;
+        // 等 data URL 解码完成
+        if (img.complete && img.naturalWidth > 0) return;
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          const timer = setTimeout(done, 3000);
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+        });
+      } catch (e) {
+        console.warn("inline image failed:", src, e);
+      }
+    })
+  );
+}
+
+async function copyMarkdown() {
+  if (!selectedIds.value.size) return;
+  const messages = chat.messages.filter((m) => selectedIds.value.has(m.id));
+  const md = buildMarkdown(messages);
+  try {
+    await navigator.clipboard.writeText(md);
+    showToast("已复制到剪贴板");
+    exitSelection();
+  } catch {
+    showToast("复制失败");
+  }
+}
+
+async function exportImage() {
+  if (!selectedIds.value.size) return;
+  exporting.value = true;
+  await nextTick();
+  // 等 markdown / KaTeX / mermaid 渲染稳定
+  await new Promise((r) => setTimeout(r, 400));
+
+  // 离屏容器：克隆选中消息的真实气泡进来
+  const container = document.createElement("div");
+  container.style.cssText =
+    "position:fixed;left:-99999px;top:0;width:600px;padding:24px;background:#f5f5f4;box-sizing:border-box;border-radius:8px;";
+
+  const header = document.createElement("div");
+  header.style.cssText =
+    "display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid #e7e5e4;font-size:12px;color:#78716c;";
+  header.innerHTML = `<span style="font-weight:500;">AI 个人助手</span><span>${new Date().toLocaleString("zh-CN")}</span>`;
+  container.appendChild(header);
+
+  const list = document.createElement("div");
+  list.style.cssText = "display:flex;flex-direction:column;gap:12px;";
+
+  const selected = chat.messages.filter((m) => selectedIds.value.has(m.id));
+  for (const m of selected) {
+    const rowEl = document.querySelector(`[data-msg-id="${m.id}"]`);
+    const bubble = rowEl?.querySelector<HTMLElement>(".chat-bubble");
+    if (!bubble) continue;
+
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText =
+      "display:flex;flex-direction:column;" +
+      (m.role === "user" ? "align-items:flex-end;" : "align-items:flex-start;");
+
+    const label = document.createElement("div");
+    label.style.cssText = "font-size:11px;color:#9ca3af;margin-bottom:4px;";
+    label.textContent = m.role === "user" ? "👤 用户" : "🤖 助手";
+    wrapper.appendChild(label);
+
+    const clone = bubble.cloneNode(true) as HTMLElement;
+    clone.style.maxWidth = "85%";
+    wrapper.appendChild(clone);
+    list.appendChild(wrapper);
+  }
+  container.appendChild(list);
+  document.body.appendChild(container);
+
+  // 把所有 img.src 通过 Rust 转成 data URL，绕开浏览器 CORS 限制
+  // （html2canvas 读 cross-origin 图片时，服务器没返 ACAO 头就渲染成空白）
+  await inlineImages(container);
+
+  try {
+    const blob = await domToBlob(container, {
+      backgroundColor: "#f5f5f4",
+      scale: 2,
+    });
+    if (!blob) {
+      showToast("导出失败");
+      return;
+    }
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const defaultName = `chat-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+    const savePath = await save({
+      defaultPath: defaultName,
+      filters: [{ name: "PNG", extensions: ["png"] }],
+    });
+    if (!savePath) {
+      // 用户取消
+      return;
+    }
+    await writeFile(savePath, buf);
+    showToast("已导出");
+    exitSelection();
+  } catch (e) {
+    console.error("Export image failed:", e);
+    showToast("导出失败：" + String(e));
+  } finally {
+    document.body.removeChild(container);
+    exporting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -171,7 +463,12 @@ function closePreview() {
     </div>
 
     <div class="relative flex-1 overflow-hidden">
-      <div ref="scroller" class="h-full overflow-y-auto px-3 py-3">
+      <div
+        v-if="bgEnabled"
+        class="pointer-events-none absolute inset-0 z-0"
+        :style="chatBg.type === 'image' ? bgImageStyle : bgColorStyle"
+      />
+      <div ref="scroller" class="relative z-10 h-full overflow-y-auto px-3 py-3">
       <Empty v-if="!chat.messages.length" description="开始新的对话" class="mt-20">
         <div class="mt-3 flex flex-wrap justify-center gap-2">
           <button
@@ -189,6 +486,7 @@ function closePreview() {
         <div
           v-for="m in chat.messages"
           :key="m.id"
+          :data-msg-id="m.id"
         >
           <div
             v-if="m.pivot"
@@ -200,16 +498,49 @@ function closePreview() {
           </div>
           <div
             v-else
-            class="group flex flex-col"
+            class="group flex flex-row gap-2"
+          >
+          <div
+            v-if="selectionMode && isSelectable(m)"
+            class="flex items-start pt-2"
+            @click.stop="toggleSelection(m.id)"
+          >
+            <div
+              class="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 transition"
+              :class="selectedIds.has(m.id)
+                ? 'border-brand-500 bg-brand-500 text-white'
+                : 'border-gray-300 bg-white'"
+            >
+              <svg
+                v-if="selectedIds.has(m.id)"
+                width="11"
+                height="11"
+                viewBox="0 0 12 12"
+                fill="none"
+              >
+                <path
+                  d="M2.5 6L5 8.5L9.5 3.5"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+          </div>
+          <div
+            class="flex flex-1 flex-col"
             :class="m.role === 'user' ? 'items-end' : 'items-start'"
           >
           <div
-            class="max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm"
-            :class="
-              m.role === 'user'
-                ? 'rounded-br-md bg-brand-500 text-white'
-                : 'rounded-bl-md bg-white text-gray-900'
-            "
+            class="chat-bubble max-w-[80%] cursor-default rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm transition"
+            :class="bubbleClasses(m)"
+            @click="onMessageClick(m)"
+            @contextmenu="onContextMenu($event, m)"
+            @pointerdown="onPointerDown($event, m)"
+            @pointermove="onPointerMove($event)"
+            @pointerup="onPointerUp"
+            @pointerleave="onPointerUp"
           >
             <div v-if="!m.content && m.streaming" class="flex items-center gap-1 text-gray-400">
               <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-gray-300"></span>
@@ -284,11 +615,12 @@ function closePreview() {
             </div>
           </div>
           <div
-            v-if="!m.streaming"
+            v-if="!m.streaming && !selectionMode"
             class="mt-1 flex gap-3 px-1 text-xs text-gray-400 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
           >
             <button class="hover:text-brand-500" @click="resend(m)">重新发送</button>
             <button class="hover:text-red-500" @click="remove(m)">删除</button>
+          </div>
           </div>
           </div>
         </div>
@@ -297,6 +629,19 @@ function closePreview() {
     </div>
 
     <div
+      v-if="selectionMode"
+      class="flex items-center justify-between gap-3 border-t border-gray-100 bg-white p-3"
+      :style="{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }"
+    >
+      <span class="text-sm text-gray-600">已选 {{ selectedIds.size }} 条</span>
+      <div class="flex flex-wrap gap-2">
+        <Button size="small" :disabled="!selectedIds.size" @click="copyMarkdown">复制 Markdown</Button>
+        <Button size="small" type="primary" :disabled="!selectedIds.size" :loading="exporting" @click="exportImage">导出图片</Button>
+        <Button size="small" @click="exitSelection">取消</Button>
+      </div>
+    </div>
+    <div
+      v-else
       class="border-t border-gray-100 bg-white p-2"
       :style="{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }"
     >

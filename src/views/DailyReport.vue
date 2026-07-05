@@ -12,6 +12,7 @@ import {
   Popup,
   showToast,
 } from "vant";
+import MonthCalendar from "@/components/MonthCalendar.vue";
 import {
   downloadText,
   exportMarkdown,
@@ -33,6 +34,9 @@ const selectedDate = ref<string>(new Date().toISOString().slice(0, 10));
 const detail = ref<DailyReportRow | null>(null);
 const generating = ref(false);
 const showPicker = ref(false);
+const showCalendar = ref(false);
+const minDate = new Date(2020, 0, 1);
+const maxDate = new Date();
 
 onMounted(async () => {
   const q = route.query.date;
@@ -53,10 +57,10 @@ async function pickDate(d: string) {
   detail.value = await getReport(d);
 }
 
-async function onDateChange() {
-  if (selectedDate.value) {
-    detail.value = await getReport(selectedDate.value);
-  }
+async function onCalendarSelect(date: string) {
+  selectedDate.value = date;
+  showCalendar.value = false;
+  detail.value = await getReport(date);
 }
 
 async function gen() {
@@ -99,19 +103,16 @@ const currentDateArr = computed<string[]>({
     <AppHeader title="每日日报" show-back />
     <div class="space-y-3 p-3">
       <CellGroup inset>
-        <!-- 桌面：native date input -->
-        <Field v-if="isDesktop" label="选择日期" input-align="right">
-          <template #input>
-            <input
-              v-model="selectedDate"
-              type="date"
-              :max="new Date().toISOString().slice(0, 10)"
-              min="2020-01-01"
-              class="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm text-stone-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
-              @change="onDateChange"
-            />
-          </template>
-        </Field>
+        <!-- 桌面：点击弹出日历 -->
+        <Field
+          v-if="isDesktop"
+          label="选择日期"
+          :model-value="selectedDate"
+          input-align="right"
+          is-link
+          readonly
+          @click="showCalendar = true"
+        />
         <!-- 移动：picker 入口 -->
         <Cell v-else title="选择日期" :value="selectedDate" is-link @click="showPicker = true" />
         <Cell title="已有日报" :value="detail ? '✓' : '—'" />
@@ -159,8 +160,8 @@ const currentDateArr = computed<string[]>({
     <Popup v-if="!isDesktop" v-model:show="showPicker" position="bottom" round>
       <DatePicker
         v-model="currentDateArr"
-        :min-date="new Date(2020, 0, 1)"
-        :max-date="new Date()"
+        :min-date="minDate"
+        :max-date="maxDate"
         @confirm="
           (v) => {
             pickDate(`${v.selectedValues[0]}-${String(v.selectedValues[1]).padStart(2, '0')}-${String(v.selectedValues[2]).padStart(2, '0')}`);
@@ -168,6 +169,17 @@ const currentDateArr = computed<string[]>({
         "
         @cancel="showPicker = false"
       />
+    </Popup>
+
+    <Popup v-if="isDesktop" v-model:show="showCalendar" teleport="body" position="center" round>
+      <div class="w-[360px] p-4">
+        <MonthCalendar
+          :model-value="selectedDate"
+          :min-date="minDate"
+          :max-date="maxDate"
+          @update:model-value="onCalendarSelect"
+        />
+      </div>
     </Popup>
   </div>
 </template>
