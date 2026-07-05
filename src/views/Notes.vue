@@ -141,50 +141,65 @@ const isEmpty = computed(() => !store.loading && store.items.length === 0);
 
 <template>
   <div class="min-h-full bg-stone-50">
-    <AppHeader title="笔记" :show-back="!isDesktop" show-sync>
-      <template #right>
-        <div class="flex items-center gap-1">
-          <button
-            class="flex h-8 w-8 items-center justify-center rounded-lg transition"
-            :class="viewMode === 'card' ? 'bg-brand-50 text-brand-600' : 'text-stone-400'"
-            @click="viewMode = 'card'"
-          >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-          </button>
-          <button
-            class="flex h-8 w-8 items-center justify-center rounded-lg transition"
-            :class="viewMode === 'list' ? 'bg-brand-50 text-brand-600' : 'text-stone-400'"
-            @click="viewMode = 'list'"
-          >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <button
-            v-if="!selectionMode"
-            class="flex h-8 items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 text-xs font-medium text-white transition active:scale-95"
-            @click="openNew"
-          >
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span>新建</span>
-          </button>
-          <button
-            v-else
-            class="flex h-8 items-center justify-center rounded-lg px-3 text-xs font-medium text-stone-500 transition"
-            @click="exitSelection"
-          >
-            取消
-          </button>
-        </div>
+    <AppHeader title="笔记" :show-back="!isDesktop" show-sync />
+
+    <!-- 操作行：视图切换 / 新建 / 多选删除（避免遮挡 tabbar） -->
+    <div
+      class="flex items-center gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2"
+    >
+      <div class="flex items-center gap-1 rounded-lg bg-stone-100 p-0.5">
+        <button
+          class="flex h-7 w-7 items-center justify-center rounded-md transition"
+          :class="viewMode === 'card' ? 'bg-white text-brand-600 shadow-sm' : 'text-stone-400'"
+          @click="viewMode = 'card'"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
+        <button
+          class="flex h-7 w-7 items-center justify-center rounded-md transition"
+          :class="viewMode === 'list' ? 'bg-white text-brand-600 shadow-sm' : 'text-stone-400'"
+          @click="viewMode = 'list'"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex-1"></div>
+
+      <template v-if="selectionMode">
+        <span class="text-xs text-stone-500">已选 {{ selectedIds.size }} 篇</span>
+        <button
+          class="flex h-8 items-center justify-center rounded-full bg-red-50 px-4 text-xs font-medium text-red-600 transition active:scale-95 disabled:opacity-40"
+          :disabled="!selectedIds.size"
+          @click="deleteSelected"
+        >
+          删除
+        </button>
+        <button
+          class="flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium text-stone-500 transition"
+          @click="exitSelection"
+        >
+          取消
+        </button>
       </template>
-    </AppHeader>
+      <button
+        v-else
+        class="flex h-8 items-center justify-center gap-1 rounded-full bg-brand-600 px-4 text-xs font-medium text-white transition active:scale-95"
+        @click="openNew"
+      >
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        <span>新建</span>
+      </button>
+    </div>
 
     <div class="p-3">
       <Empty v-if="isEmpty" description="还没有笔记" />
@@ -296,26 +311,6 @@ const isEmpty = computed(() => !store.loading && store.items.length === 0);
           </div>
         </li>
       </ul>
-    </div>
-
-    <!-- 多选底部操作栏 -->
-    <div
-      v-if="selectionMode"
-      class="fixed inset-x-0 bottom-0 z-30 border-t border-stone-100 bg-white p-3"
-      style="padding-bottom: calc(env(safe-area-inset-bottom) + 8px)"
-    >
-      <div class="mx-auto flex max-w-3xl items-center justify-between">
-        <span class="text-xs text-stone-500">已选 {{ selectedIds.size }} 篇</span>
-        <div class="flex gap-2">
-          <button
-            class="rounded-full bg-red-50 px-4 py-1.5 text-xs font-medium text-red-600 transition active:scale-95 disabled:opacity-40"
-            :disabled="!selectedIds.size"
-            @click="deleteSelected"
-          >
-            删除
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- 桌面端点击空白关闭右键菜单 -->
