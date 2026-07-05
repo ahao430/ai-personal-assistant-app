@@ -11,7 +11,7 @@ import { useAppStore } from "@/stores/app";
 import { useWeatherSettingsStore } from "@/stores/weather-settings";
 import { useChatBackgroundStore } from "@/stores/chat-background";
 
-const APP_VERSION = "0.0.12";
+const APP_VERSION = "0.0.13";
 
 const router = useRouter();
 const llm = useLlmConfigStore();
@@ -53,21 +53,21 @@ function formatTs(ts: number | null): string {
           <h2 class="text-sm font-semibold text-stone-800">主题色</h2>
           <span class="text-xs text-stone-500">{{ theme.current.name }}</span>
         </div>
-        <div class="flex items-center justify-between">
+        <div class="theme-swatches">
           <button
             v-for="t in theme.themes"
             :key="t.key"
-            class="flex flex-1 flex-col items-center gap-1.5 py-1 transition active:scale-95"
+            class="flex flex-col items-center gap-1 py-1 transition active:scale-95"
             @click="theme.setTheme(t.key)"
           >
             <span
-              class="flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-white transition"
+              class="flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-white transition"
               :class="theme.current.key === t.key ? 'ring-stone-800' : 'ring-transparent'"
               :style="{ background: t.swatch }"
             >
               <svg
                 v-if="theme.current.key === t.key"
-                class="h-5 w-5 text-white"
+                class="h-4 w-4 text-white"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -79,7 +79,7 @@ function formatTs(ts: number | null): string {
               </svg>
             </span>
             <span
-              class="text-[11px]"
+              class="text-[11px] whitespace-nowrap"
               :class="theme.current.key === t.key ? 'font-medium text-stone-800' : 'text-stone-500'"
             >
               {{ t.name }}
@@ -176,3 +176,28 @@ function formatTs(ts: number | null): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.theme-swatches {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+.theme-swatches button {
+  flex: 0 0 auto;
+  min-width: 44px;
+}
+
+.theme-swatches::-webkit-scrollbar {
+  height: 4px;
+}
+
+.theme-swatches::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+</style>

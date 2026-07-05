@@ -2,11 +2,16 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 /** 获取 app_data_dir 的绝对路径（用于拼接图片完整路径） */
 let appDataDirCache: string | null = null;
+let platformCache: "android" | "desktop" | null = null;
 
 export async function getAppDataDir(): Promise<string> {
   if (appDataDirCache) return appDataDirCache;
   try {
     appDataDirCache = await invoke<string>("app_data_dir_resolve");
+    if (platformCache === null) {
+      // Android 私有目录特征：/data/user/0/<pkg>/files 或 /data/data/<pkg>/files
+      platformCache = appDataDirCache.startsWith("/data/") ? "android" : "desktop";
+    }
     return appDataDirCache;
   } catch {
     // 浏览器环境
@@ -14,9 +19,16 @@ export async function getAppDataDir(): Promise<string> {
   }
 }
 
-function isAndroid(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /android/i.test(navigator.userAgent);
+async function isAndroid(): Promise<boolean> {
+  if (platformCache) return platformCache === "android";
+  if (typeof navigator !== "undefined" && /android/i.test(navigator.userAgent)) {
+    platformCache = "android";
+    return true;
+  }
+  // UA 不可靠时（Tauri Android WebView 部分 ROM 下 UA 可能不含 Android），
+  // 用 app_data_dir 路径特征兜底判断
+  await getAppDataDir();
+  return platformCache === "android";
 }
 
 /**
@@ -31,7 +43,7 @@ function isAndroid(): boolean {
 export async function resolveAbsoluteImageUrl(absPath: string): Promise<string> {
   if (!absPath) return "";
   if (/^(https?:|data:|asset:|blob:)/.test(absPath)) return absPath;
-  if (isAndroid()) {
+  if (await isAndroid()) {
     const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: absPath });
     if (!dataUrl) throw new Error("Rust 返回空 data URL");
     return dataUrl;

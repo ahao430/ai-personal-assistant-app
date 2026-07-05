@@ -84,26 +84,29 @@ async function loadEditData(editId: string) {
 }
 
 function currentEditId() {
-  const raw = route.params.configId ?? route.params.id;
-  if (typeof raw === "string") return raw;
-  if (Array.isArray(raw) && raw.length > 0) return raw[0];
-  return undefined;
+  const id = route.params.configId ?? route.params.id;
+  return typeof id === "string" ? id : undefined;
 }
 
 onMounted(async () => {
-  if (!currentEditId() && !store.configs.length) {
-    await store.reload();
-    isDefault.value = !store.defaultConfig;
+  const editId = currentEditId();
+  if (editId) {
+    await loadEditData(editId);
+  } else {
+    if (!store.configs.length) {
+      await store.reload();
+    }
+    if (!store.configs.length) {
+      isDefault.value = true;
+    } else if (store.defaultConfig) {
+      isDefault.value = false;
+    }
   }
 });
 
-watch(
-  () => currentEditId(),
-  (newId) => {
-    if (newId) loadEditData(newId);
-  },
-  { immediate: true }
-);
+watch(() => currentEditId(), (newId) => {
+  if (newId) loadEditData(newId);
+});
 
 async function fetchModels() {
   if (!baseUrl.value.trim() || !apiKey.value.trim()) return showToast("请填写 Base URL 和 API Key");

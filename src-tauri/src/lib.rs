@@ -130,11 +130,12 @@ async fn image_gen(
 }
 
 /// 把用户选的任意图片路径复制到 app_data_dir/images/imported/ 下，
-/// 返回复制后的绝对路径。用于会话背景图等场景：
-/// - 桌面端 convertFileSrc 也能访问任意路径，但统一存放便于管理；
-/// - Android 端 tauri-plugin-dialog 选图返回的多是 cache 临时路径，
-///   会被系统清理；同时部分机型返回 content:// URI，tokio::fs::read 读不到。
-///   复制到 app_data_dir 内可彻底避开这两类问题。
+/// 返回**相对路径**（如 `imported/bg_xxx.png`），相对路径会随 sync_images 同步到
+/// 其他设备，跨设备通用。
+///
+/// 注意：Android 上 tauri-plugin-dialog 返回的多是 content:// URI，
+/// tokio::fs::read 读不到，需要前端改用 `<input type="file">` + save_image_data_url。
+/// 此命令主要服务于桌面端 dialog 选图。
 #[tauri::command]
 async fn import_user_image(app: tauri::AppHandle, src: String) -> Result<String, String> {
     use tauri::Manager;
@@ -167,7 +168,61 @@ async fn import_user_image(app: tauri::AppHandle, src: String) -> Result<String,
 
     std::fs::write(&dest, &bytes).map_err(|e| format!("write dest: {e}"))?;
 
-    Ok(dest.to_string_lossy().to_string())
+    let rel = dest
+        .strip_prefix(dir.join("images"))
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| "dest out of images dir".to_string())?;
+    Ok(rel.trim_start_matches('/').to_string())
+}
+
+/// 把前端传入的 data URL（base64）解码后写入 app_data_dir/images/<sub_dir>/ 下，
+/// 返回**相对路径**（如 `imported/bg_xxx.png`）。相对路径会随 sync_images 同步到
+/// 其他设备，跨设备通用。
+///
+/// 用途：Android 上 tauri-plugin-dialog 选图返回 content:// URI，tokio::fs 读不到；
+/// 前端改用 `<input type="file">` + FileReader 把图读成 data URL 传过来即可绕开。
+#[tauri::command]
+async fn save_image_data_url(
+    app: tauri::AppHandle,
+    data_url: String,
+    sub_dir: String,
+) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let (mime, b64) = data_url
+        .strip_prefix("data:")
+        .and_then(|rest| rest.split_once(","))
+        .ok_or_else(|| format!("malformed data url: prefix"))?;
+    let (mime_part, _encoding) = mime.split_once(';').unwrap_or((mime, ""));
+    let ext = match mime_part {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        "image/bmp" => "bmp",
+        _ => "png",
+    };
+
+    let bytes = STANDARD
+        .decode(b64.trim())
+        .map_err(|e| format!("decode base64: {e}"))?;
+
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let target_dir = dir.join("images").join(if sub_dir.is_empty() { "imported".to_string() } else { sub_dir });
+    std::fs::create_dir_all(&target_dir).map_err(|e| format!("mkdir: {e}"))?;
+
+    let id = uuid::Uuid::new_v4().simple();
+    let filename = format!("bg_{id}.{ext}");
+    let dest = target_dir.join(&filename);
+    std::fs::write(&dest, &bytes).map_err(|e| format!("write: {e}"))?;
+
+    // 返回相对路径（相对于 images/）
+    let rel = dest
+        .strip_prefix(dir.join("images"))
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| "dest out of images dir".to_string())?;
+    Ok(rel.trim_start_matches('/').to_string())
 }
 
 #[tauri::command]
@@ -190,6 +245,7 @@ pub fn run() {
             app_data_dir_resolve,
             fetch_as_data_url,
             import_user_image,
+            save_image_data_url,
             chat_send,
             list_models,
             image_gen,

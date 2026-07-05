@@ -31,7 +31,11 @@ const quickPrompts = [
 ];
 
 onMounted(async () => {
-  await Promise.all([llm.reload(), chat.loadDate(new Date())]);
+  await Promise.all([
+    llm.reload(),
+    chat.loadDate(new Date()),
+    chatBg.loadFromDb(),
+  ]);
   await nextTick(scrollToBottom);
 });
 

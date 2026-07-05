@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import { Button, Cell, CellGroup, Slider, showToast } from "vant";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -13,6 +13,10 @@ import { useLayoutMode } from "@/composables/useLayoutMode";
 const store = useChatBackgroundStore();
 const { isDesktop } = useLayoutMode();
 const importing = ref(false);
+
+// Android 端用 <input type="file"> 选图，规避 content:// URI 不可读的问题
+const mobileFileInput = ref<HTMLInputElement | null>(null);
+let mobilePickTarget: "mobile" | "desktop" = "mobile";
 
 const PRESET_COLORS = [
   "#0d9488",
@@ -67,32 +71,69 @@ const previewBgClass = computed(() => {
   }
 });
 
+onMounted(() => {
+  store.loadFromDb();
+});
+
 async function pickImage(target: "desktop" | "mobile") {
   if (importing.value) return;
+  if (isDesktop.value) {
+    await pickImageDesktop(target);
+  } else {
+    mobilePickTarget = target;
+    mobileFileInput.value?.click();
+  }
+}
+
+async function pickImageDesktop(target: "desktop" | "mobile") {
   try {
     const selected = await open({
       multiple: false,
       filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
     });
     if (typeof selected !== "string" || !selected) return;
-
     importing.value = true;
-    // 把图片复制到 app_data_dir/images/imported/：
-    // 1. 统一存放，避免 cache 临时路径被 Android 系统清理
-    // 2. 规避 Android 上 content:// URI 读不到的问题
-    let finalPath = selected;
-    try {
-      finalPath = await invoke<string>("import_user_image", { src: selected });
-    } catch (e) {
-      console.warn("import_user_image failed, fallback to raw path:", e);
-    }
-    store.setImage(finalPath, target);
+    // Rust 把图复制到 app_data_dir/images/imported/，返回相对路径
+    const relPath = await invoke<string>("import_user_image", { src: selected });
+    store.setImage(relPath, target);
     showToast("已选择图片");
   } catch (e) {
     showToast("选择图片失败：" + String(e));
   } finally {
     importing.value = false;
   }
+}
+
+async function onMobileFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ""; // 允许重复选同一文件
+  if (!file) return;
+  if (importing.value) return;
+  importing.value = true;
+  try {
+    const dataUrl = await readAsDataUrl(file);
+    // Rust 解码 data URL 写入 app_data_dir/images/imported/，返回相对路径
+    const relPath = await invoke<string>("save_image_data_url", {
+      dataUrl,
+      subDir: "imported",
+    });
+    store.setImage(relPath, mobilePickTarget);
+    showToast("已选择图片");
+  } catch (e) {
+    showToast("选择图片失败：" + String(e));
+  } finally {
+    importing.value = false;
+  }
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("read error"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function selectColor(c: string) {
@@ -283,6 +324,16 @@ function selectMode(m: "none" | "image" | "color") {
         </div>
       </div>
     </div>
+
+    <!-- Android 选图入口，被 mobileFileInput.click() 触发 -->
+    <input
+      v-if="!isDesktop"
+      ref="mobileFileInput"
+      type="file"
+      accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+      class="hidden"
+      @change="onMobileFileChange"
+    />
   </div>
 </template>
 

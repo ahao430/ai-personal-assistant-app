@@ -86,6 +86,13 @@ export const BASE_SCHEMA = [
     value TEXT NOT NULL
   )`,
 
+  // 用户偏好（参与同步）：背景图、主题等需要跨设备漫游的设置
+  `CREATE TABLE IF NOT EXISTS user_prefs (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+
   // 数据清洗：之前 Vant Switch 直接 v-model 把 all_day 写成 boolean true/false，
   // 经 tauri-plugin-sql 进 SQLite 后变 TEXT 'true'/'false'，导致 Rust 读 i64 崩。
   // 幂等：INTEGER 1/0 → 1/0，TEXT 'true'/'false' → 1/0。

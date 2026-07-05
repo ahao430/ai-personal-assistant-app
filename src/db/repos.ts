@@ -195,6 +195,33 @@ export async function deleteImageConfig(id: string): Promise<void> {
   await db.execute("DELETE FROM image_configs WHERE id = $1", [id]);
 }
 
+// ----- user_prefs（参与同步） -----
+
+export async function getUserPref<T>(key: string): Promise<T | null> {
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM user_prefs WHERE key = $1 LIMIT 1",
+    [key]
+  );
+  if (!rows[0]?.value) return null;
+  try {
+    return JSON.parse(rows[0].value) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function setUserPref<T>(key: string, value: T): Promise<void> {
+  const db = await getDb();
+  const ts = now();
+  await db.execute(
+    `INSERT INTO user_prefs (key, value, updated_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+    [key, JSON.stringify(value), ts]
+  );
+}
+
 // ----- Todo CRUD -----
 
 export async function listTodos(filter: {
