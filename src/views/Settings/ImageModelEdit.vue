@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import {
@@ -48,6 +48,13 @@ const qualityOptions = [
 
 const showSizePicker = ref(false);
 const showQualityPicker = ref(false);
+
+const defaultSizeText = computed(
+  () => sizeOptions.find((o) => o.value === defaultSize.value)?.text ?? defaultSize.value
+);
+const defaultQualityText = computed(
+  () => qualityOptions.find((o) => o.value === defaultQuality.value)?.text ?? defaultQuality.value
+);
 
 function fillFromRow(row: {
   name: string;
@@ -168,16 +175,45 @@ async function save() {
             </div>
           </template>
         </Field>
+        <!-- 桌面：native select -->
+        <Field v-if="isDesktop" label="默认尺寸" input-align="right">
+          <template #input>
+            <select
+              v-model="defaultSize"
+              class="w-full rounded-md border border-stone-300 bg-white px-2 py-1 text-sm text-stone-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
+            >
+              <option v-for="o in sizeOptions" :key="o.value" :value="o.value">
+                {{ o.text }}
+              </option>
+            </select>
+          </template>
+        </Field>
+        <!-- 移动：picker 入口 -->
         <Field
-          v-model="defaultSize"
+          v-else
+          :model-value="defaultSizeText"
           label="默认尺寸"
           is-link
           readonly
           placeholder="选择尺寸"
           @click="showSizePicker = true"
         />
+
+        <Field v-if="isDesktop" label="默认质量" input-align="right">
+          <template #input>
+            <select
+              v-model="defaultQuality"
+              class="w-full rounded-md border border-stone-300 bg-white px-2 py-1 text-sm text-stone-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
+            >
+              <option v-for="o in qualityOptions" :key="o.value" :value="o.value">
+                {{ o.text }}
+              </option>
+            </select>
+          </template>
+        </Field>
         <Field
-          v-model="defaultQuality"
+          v-else
+          :model-value="defaultQualityText"
           label="默认质量"
           is-link
           readonly
@@ -233,7 +269,7 @@ async function save() {
       />
     </Popup>
 
-    <Popup v-model:show="showSizePicker" position="bottom">
+    <Popup v-if="!isDesktop" v-model:show="showSizePicker" position="bottom">
       <Picker
         :columns="sizeOptions.map((o) => ({ text: o.text, value: o.value }))"
         :default-index="sizeOptions.findIndex((o) => o.value === defaultSize)"
@@ -247,7 +283,7 @@ async function save() {
       />
     </Popup>
 
-    <Popup v-model:show="showQualityPicker" position="bottom">
+    <Popup v-if="!isDesktop" v-model:show="showQualityPicker" position="bottom">
       <Picker
         :columns="qualityOptions.map((o) => ({ text: o.text, value: o.value }))"
         :default-index="qualityOptions.findIndex((o) => o.value === defaultQuality)"

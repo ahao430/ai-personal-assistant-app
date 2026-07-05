@@ -8,6 +8,7 @@ import {
   CellGroup,
   DatePicker,
   Empty,
+  Field,
   Popup,
   showToast,
 } from "vant";
@@ -20,10 +21,12 @@ import {
   type DailyReportRow,
 } from "@/api/report";
 import { useLlmConfigStore } from "@/stores/llm-config";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const route = useRoute();
 const router = useRouter();
 const llm = useLlmConfigStore();
+const { isDesktop } = useLayoutMode();
 
 const reports = ref<DailyReportRow[]>([]);
 const selectedDate = ref<string>(new Date().toISOString().slice(0, 10));
@@ -48,6 +51,12 @@ async function pickDate(d: string) {
   selectedDate.value = d;
   showPicker.value = false;
   detail.value = await getReport(d);
+}
+
+async function onDateChange() {
+  if (selectedDate.value) {
+    detail.value = await getReport(selectedDate.value);
+  }
 }
 
 async function gen() {
@@ -90,7 +99,21 @@ const currentDateArr = computed<string[]>({
     <AppHeader title="每日日报" show-back />
     <div class="space-y-3 p-3">
       <CellGroup inset>
-        <Cell title="选择日期" :value="selectedDate" is-link @click="showPicker = true" />
+        <!-- 桌面：native date input -->
+        <Field v-if="isDesktop" label="选择日期" input-align="right">
+          <template #input>
+            <input
+              v-model="selectedDate"
+              type="date"
+              :max="new Date().toISOString().slice(0, 10)"
+              min="2020-01-01"
+              class="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm text-stone-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400"
+              @change="onDateChange"
+            />
+          </template>
+        </Field>
+        <!-- 移动：picker 入口 -->
+        <Cell v-else title="选择日期" :value="selectedDate" is-link @click="showPicker = true" />
         <Cell title="已有日报" :value="detail ? '✓' : '—'" />
       </CellGroup>
 
@@ -133,7 +156,7 @@ const currentDateArr = computed<string[]>({
       </div>
     </div>
 
-    <Popup v-model:show="showPicker" position="bottom" round>
+    <Popup v-if="!isDesktop" v-model:show="showPicker" position="bottom" round>
       <DatePicker
         v-model="currentDateArr"
         :min-date="new Date(2020, 0, 1)"
