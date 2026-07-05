@@ -12,6 +12,11 @@ use scheduler::generate_report;
 use sync::{signaling::SignalingConfig, sync_now};
 
 #[tauri::command]
+fn is_android() -> bool {
+    cfg!(target_os = "android")
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -242,6 +247,7 @@ pub fn run() {
         .manage(notification::init_state())
         .invoke_handler(tauri::generate_handler![
             greet,
+            is_android,
             app_data_dir_resolve,
             fetch_as_data_url,
             import_user_image,

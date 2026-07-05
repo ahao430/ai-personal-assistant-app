@@ -2,6 +2,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 /** 获取 app_data_dir 的绝对路径（用于拼接图片完整路径） */
 let appDataDirCache: string | null = null;
+let androidCache: boolean | null = null;
 
 export async function getAppDataDir(): Promise<string> {
   if (appDataDirCache) return appDataDirCache;
@@ -13,33 +14,29 @@ export async function getAppDataDir(): Promise<string> {
   }
 }
 
-/** 检测是否为桌面平台（macOS / Windows / Linux）。
- *  移动端（Android / iOS）的 WebView 对 Tauri asset 协议支持不稳定，
- *  所以这里**反向检测桌面**：是桌面走 convertFileSrc，非桌面走 data URL。 */
-function isDesktopPlatform(): boolean {
-  if (typeof navigator === "undefined") return true; // SSR 默认桌面
-  const ua = navigator.userAgent;
-  // 先排除移动端（Android UA 也含 "Linux"，必须先排除）
-  if (/android|iphone|ipad|ipod/i.test(ua)) return false;
-  // 桌面 OS 关键字
-  if (/macintosh|windows|linux/i.test(ua)) return true;
-  // Tauri 桌面（有 __TAURI_INTERNALS__ 且无移动标记）
-  if ("__TAURI_INTERNALS__" in window) return true;
-  return false;
+async function isAndroidPlatform(): Promise<boolean> {
+  if (androidCache !== null) return androidCache;
+  try {
+    androidCache = await invoke<boolean>("is_android");
+  } catch {
+    androidCache = false;
+  }
+  return androidCache;
 }
 
 /**
  * 把任意绝对文件路径转成可在 `<img>`/`background-image` 中显示的 URL。
  *
- * 桌面端走 convertFileSrc（asset 协议，性能好）；移动端走 Rust 命令
+ * 桌面端走 convertFileSrc（asset 协议，性能好）；Android 端走 Rust 命令
  * 读文件返回 data URL（WebView 对 asset 协议支持不稳定）。
+ * 平台判断用 Rust 编译期 `cfg!(target_os = "android")`，零开销，不依赖 UA。
  *
  * 失败时抛错（不 swallow），调用方可以拿到错误信息展示给用户。
  */
 export async function resolveAbsoluteImageUrl(absPath: string): Promise<string> {
   if (!absPath) return "";
   if (/^(https?:|data:|asset:|blob:)/.test(absPath)) return absPath;
-  if (!isDesktopPlatform()) {
+  if (await isAndroidPlatform()) {
     const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: absPath });
     if (!dataUrl) throw new Error("Rust 返回空 data URL");
     return dataUrl;
