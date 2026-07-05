@@ -293,7 +293,7 @@ function cellClass(year: number, month: number, day: number | null) {
       <button
         v-for="(day, i) in monthMatrix"
         :key="i"
-        class="relative flex aspect-square flex-col items-center justify-center gap-1 bg-white text-base leading-none"
+        class="relative flex aspect-square flex-col items-center justify-center gap-1 bg-white text-base leading-none md:aspect-auto md:h-20"
         :class="cellClass(cursor.year, cursor.month, day)"
         @click="day && (selectedDay = day)"
       >

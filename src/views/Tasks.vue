@@ -17,9 +17,11 @@ import {
   Tag,
 } from "vant";
 import { useTodoStore } from "@/stores/todo";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 import type { TodoRow } from "@/db/repos";
 
 const store = useTodoStore();
+const { isDesktop } = useLayoutMode();
 
 const showEditor = ref(false);
 const editing = ref<Partial<TodoRow> & { title: string }>({
@@ -116,7 +118,7 @@ function fromLocalInput(v: string): number {
 
 <template>
   <div>
-    <AppHeader title="待办" />
+    <AppHeader title="待办" :show-back="!isDesktop" />
     <div class="sticky top-[57px] z-10 flex border-b border-gray-100 bg-white text-sm">
       <button
         v-for="t in tabs"

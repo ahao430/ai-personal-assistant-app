@@ -32,3 +32,16 @@ pub struct ImageGenArgs {
     #[serde(default)]
     pub n: Option<u32>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageEditArgs {
+    pub prompt: String,
+    pub config: ImageConfig,
+    /// 参考图绝对路径（app_data_dir 下的绝对路径）
+    pub image_path: String,
+    #[serde(default)]
+    pub size: Option<String>,
+    #[serde(default)]
+    pub n: Option<u32>,
+}

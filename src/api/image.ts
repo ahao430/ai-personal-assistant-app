@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { LlmConfig } from "./llm";
 
 export interface ImageConfig {
   id: string;
@@ -18,6 +19,14 @@ export interface ImageGenArgs {
   n?: number;
 }
 
+export interface ImageEditArgs {
+  prompt: string;
+  config: ImageConfig;
+  imagePath: string;
+  size?: string;
+  n?: number;
+}
+
 export interface ImageGenResult {
   /** 相对 app_data/images 的路径，例如 2026/07/04/xxx.png */
   path: string;
@@ -26,4 +35,12 @@ export interface ImageGenResult {
 
 export function imageGen(args: ImageGenArgs): Promise<ImageGenResult[]> {
   return invoke<ImageGenResult[]>("image_gen", { args });
+}
+
+export function imageEdit(args: ImageEditArgs): Promise<ImageGenResult[]> {
+  return invoke<ImageGenResult[]>("image_edit", { args });
+}
+
+export function optimizeImagePrompt(idea: string, config: LlmConfig): Promise<string> {
+  return invoke<string>("optimize_image_prompt", { args: { idea, config } });
 }

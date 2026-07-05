@@ -134,6 +134,66 @@ async fn image_gen(
     image::run_image_generation(app, args).await
 }
 
+#[tauri::command]
+async fn image_edit(
+    app: tauri::AppHandle,
+    args: image::ImageEditArgs,
+) -> Result<Vec<image::ImageGenResult>, String> {
+    image::run_image_edit(app, args).await
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OptimizePromptArgs {
+    idea: String,
+    config: llm::LlmConfig,
+}
+
+#[tauri::command]
+async fn optimize_image_prompt(args: OptimizePromptArgs) -> Result<String, String> {
+    let system = "你是一个画图提示词优化助手。给定用户的简单想法，输出一段详细、富有视觉细节的英文 Stable Diffusion 风格提示词。要求：\n\
+1. 只输出最终提示词，不要解释、不要加引号、不要换行\n\
+2. 保留用户的核心意图\n\
+3. 加入光线、构图、风格、细节描写";
+    let body = serde_json::json!({
+        "model": args.config.model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": args.idea },
+        ],
+        "stream": false,
+    });
+    let base_url = args.config.base_url.trim_end_matches('/').to_string();
+    let url = format!("{base_url}/chat/completions");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .post(&url)
+        .bearer_auth(&args.config.api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("LLM 请求失败: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {status}: {text}"));
+    }
+    let parsed: serde_json::Value = resp.json().await.map_err(|e| format!("解析失败: {e}"))?;
+    let content = parsed
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .ok_or("LLM 返回空")?
+        .trim()
+        .to_string();
+    Ok(content)
+}
+
 /// 把用户选的任意图片路径复制到 app_data_dir/images/imported/ 下，
 /// 返回**相对路径**（如 `imported/bg_xxx.png`），相对路径会随 sync_images 同步到
 /// 其他设备，跨设备通用。
@@ -255,6 +315,8 @@ pub fn run() {
             chat_send,
             list_models,
             image_gen,
+            image_edit,
+            optimize_image_prompt,
             schedule_notification,
             cancel_notification,
             send_test_notification,

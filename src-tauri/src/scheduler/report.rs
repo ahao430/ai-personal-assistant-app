@@ -93,13 +93,7 @@ pub async fn generate_daily_report(
     // 完成的 todos
     let mut done_lines: Vec<String> = Vec::new();
     {
-        let day_start = chrono::NaiveDate::from_ymd_opt(y, m, d)
-            .ok_or("invalid date")?
-            .and_hms_opt(0, 0, 0)
-            .ok_or("invalid date")?
-            .and_utc()
-            .timestamp_millis();
-        let day_end = day_start + 86_400_000;
+        let (day_start, day_end) = local_day_range(y, m, d)?;
         let mut stmt = conn
             .prepare(
                 "SELECT title FROM todos WHERE status='done' AND updated_at >= ?1 AND updated_at < ?2 ORDER BY updated_at",
@@ -116,13 +110,7 @@ pub async fn generate_daily_report(
     // events 当日
     let mut event_lines: Vec<String> = Vec::new();
     {
-        let day_start = chrono::NaiveDate::from_ymd_opt(y, m, d)
-            .ok_or("invalid date")?
-            .and_hms_opt(0, 0, 0)
-            .ok_or("invalid date")?
-            .and_utc()
-            .timestamp_millis();
-        let day_end = day_start + 86_400_000;
+        let (day_start, day_end) = local_day_range(y, m, d)?;
         let mut stmt = conn
             .prepare("SELECT title, start_at, CAST(all_day AS INTEGER) AS all_day FROM events WHERE start_at >= ?1 AND start_at < ?2 ORDER BY start_at")
             .map_err(|e| e.to_string())?;
@@ -283,6 +271,18 @@ fn parse_date(s: &str) -> Result<(i32, u32, u32), String> {
     let m: u32 = parts[1].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
     let d: u32 = parts[2].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
     Ok((y, m, d))
+}
+
+fn local_day_range(y: i32, m: u32, d: u32) -> Result<(i64, i64), String> {
+    let start = chrono::NaiveDate::from_ymd_opt(y, m, d)
+        .ok_or("invalid date")?
+        .and_hms_opt(0, 0, 0)
+        .ok_or("invalid date")?
+        .and_local_timezone(chrono::Local)
+        .latest()
+        .ok_or("invalid local date")?
+        .timestamp_millis();
+    Ok((start, start + 86_400_000))
 }
 
 #[allow(dead_code)]

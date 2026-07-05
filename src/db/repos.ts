@@ -56,6 +56,17 @@ export interface EventRow {
   updated_at: number;
 }
 
+export interface NoteRow {
+  id: string;
+  title: string;
+  content: string;
+  color: string;
+  font: string;
+  paper: string;
+  created_at: number;
+  updated_at: number;
+}
+
 function now(): number {
   return Date.now();
 }
@@ -364,5 +375,65 @@ export async function upsertEvent(
 export async function deleteEvent(id: string): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM events WHERE id=$1", [id]);
+}
+
+// ----- Note CRUD -----
+
+export async function listNotes(): Promise<NoteRow[]> {
+  const db = await getDb();
+  return db.select<NoteRow[]>(
+    "SELECT * FROM notes ORDER BY updated_at DESC"
+  );
+}
+
+export async function getNote(id: string): Promise<NoteRow | null> {
+  const db = await getDb();
+  const rows = await db.select<NoteRow[]>(
+    "SELECT * FROM notes WHERE id=$1 LIMIT 1",
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function upsertNote(
+  row: Partial<NoteRow> & { title: string }
+): Promise<string> {
+  const db = await getDb();
+  const id = row.id ?? uuid();
+  const ts = Date.now();
+  await db.execute(
+    `INSERT INTO notes (id, title, content, color, font, paper, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT(id) DO UPDATE SET
+       title=excluded.title,
+       content=excluded.content,
+       color=excluded.color,
+       font=excluded.font,
+       paper=excluded.paper,
+       updated_at=excluded.updated_at`,
+    [
+      id,
+      row.title,
+      row.content ?? "",
+      row.color ?? "",
+      row.font ?? "",
+      row.paper ?? "",
+      row.created_at ?? ts,
+      ts,
+    ]
+  );
+  return id;
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM notes WHERE id=$1", [id]);
+}
+
+export async function deleteNotes(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const db = await getDb();
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+  await db.execute(`DELETE FROM notes WHERE id IN (${placeholders})`, ids);
 }
 

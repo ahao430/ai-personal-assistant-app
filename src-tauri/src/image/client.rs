@@ -1,4 +1,4 @@
-use crate::image::types::ImageGenArgs;
+use crate::image::types::{ImageEditArgs, ImageGenArgs};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
@@ -119,6 +119,119 @@ pub async fn run_image_generation(
             std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
         } else if let Some(remote) = item.url {
             // 没有 b64，下载 URL
+            let bytes = client
+                .get(&remote)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?
+                .bytes()
+                .await
+                .map_err(|e| e.to_string())?;
+            std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+        } else {
+            continue;
+        }
+
+        let rel = path
+            .strip_prefix(&dir)
+            .ok()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        results.push(ImageGenResult {
+            path: rel,
+            remote_url,
+        });
+    }
+
+    if results.is_empty() {
+        return Err("服务返回空数据".into());
+    }
+    Ok(results)
+}
+
+pub async fn run_image_edit(
+    app: AppHandle,
+    args: ImageEditArgs,
+) -> Result<Vec<ImageGenResult>, String> {
+    let ImageEditArgs {
+        prompt,
+        config,
+        image_path,
+        size,
+        n,
+    } = args;
+
+    let size = size.unwrap_or(config.default_size);
+    let n = n.unwrap_or(1);
+
+    // 读取参考图
+    let image_bytes = tokio::fs::read(&image_path)
+        .await
+        .map_err(|e| format!("读取参考图失败: {e}"))?;
+    let image_filename = std::path::Path::new(&image_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("reference.png")
+        .to_string();
+
+    let base_url = config.base_url.trim_end_matches('/').to_string();
+    let url = format!("{}/images/edits", base_url);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .http1_only()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let part = reqwest::multipart::Part::bytes(image_bytes)
+        .file_name(image_filename)
+        .mime_str("image/png")
+        .map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .text("model", config.model.clone())
+        .text("prompt", prompt)
+        .text("n", n.to_string())
+        .text("size", size)
+        .part("image", part);
+
+    let resp = client
+        .post(&url)
+        .bearer_auth(&config.api_key)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| fmt_reqwest_err("请求失败", &e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {status}: {text}"));
+    }
+
+    let parsed: OpenAiImageResponse = resp.json().await.map_err(|e| format!("解析失败: {e}"))?;
+
+    let dir = image_dir(&app);
+    let now = chrono::Utc::now();
+    let yyyy = now.format("%Y");
+    let mm = now.format("%m");
+    let sub_dir = dir.join(format!("{yyyy}/{mm}"));
+    std::fs::create_dir_all(&sub_dir).map_err(|e| e.to_string())?;
+
+    let mut results = Vec::with_capacity(parsed.data.len());
+    for (i, item) in parsed.data.into_iter().enumerate() {
+        let fname = format!(
+            "{}_{}_{i}.png",
+            now.format("%Y%m%d%H%M%S"),
+            uuid::Uuid::new_v4().simple()
+        );
+        let path = sub_dir.join(&fname);
+        let remote_url = item.url.clone();
+
+        if let Some(b64) = item.b64_json {
+            use base64_impl as b64;
+            let bytes = b64::decode(&b64).map_err(|e| format!("base64 解码失败: {e}"))?;
+            std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        } else if let Some(remote) = item.url {
             let bytes = client
                 .get(&remote)
                 .send()

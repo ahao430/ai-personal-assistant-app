@@ -8,6 +8,7 @@ import {
   kvSet,
   kvSetJson,
 } from "@/api/kv";
+import { getUserPref, setUserPref } from "@/db/repos";
 import {
   signalingStart,
   syncNow,
@@ -15,6 +16,8 @@ import {
   type SyncResult,
   type WebdavConfig,
 } from "@/api/sync";
+
+const USER_PREF_KEY_SIGNALING_URL = "signaling_url";
 
 export const useSyncStore = defineStore("sync", () => {
   const webdav = ref<WebdavConfig>({ baseUrl: "", username: "", password: "" });
@@ -28,10 +31,19 @@ export const useSyncStore = defineStore("sync", () => {
   async function load() {
     const wd = await kvGetJson<WebdavConfig>(KV_KEYS.webdav);
     if (wd) webdav.value = wd;
-    const sg = await kvGetJson<SignalingConfig>(KV_KEYS.signaling);
-    if (sg) signaling.value = sg;
+    // signaling URL from user_prefs (syncable), deviceId from local_kv
+    const sigUrl = await getUserPref<string>(USER_PREF_KEY_SIGNALING_URL);
+    if (sigUrl) signaling.value.url = sigUrl;
+    else {
+      // migrate legacy signaling config from local_kv
+      const sg = await kvGetJson<{ url?: string }>(KV_KEYS.signaling);
+      if (sg?.url) {
+        signaling.value.url = sg.url;
+        await setUserPref(USER_PREF_KEY_SIGNALING_URL, sg.url).catch(() => {});
+      }
+    }
     const did = await kvGet(KV_KEYS.deviceId);
-    if (did && !signaling.value.deviceId) signaling.value.deviceId = did;
+    if (did) signaling.value.deviceId = did;
   }
 
   async function saveWebdav(cfg: WebdavConfig) {
@@ -41,7 +53,7 @@ export const useSyncStore = defineStore("sync", () => {
 
   async function saveSignaling(cfg: SignalingConfig) {
     signaling.value = cfg;
-    await kvSetJson(KV_KEYS.signaling, cfg);
+    await setUserPref(USER_PREF_KEY_SIGNALING_URL, cfg.url);
     if (cfg.deviceId) await kvSet(KV_KEYS.deviceId, cfg.deviceId);
   }
 
@@ -79,8 +91,19 @@ export const useSyncStore = defineStore("sync", () => {
 
   async function connectSignaling() {
     if (!signaling.value.url) return;
+    const id = signaling.value.deviceId;
+    // build full connection URL with device param, but don't persist it
+    let connUrl = signaling.value.url;
+    if (id) {
+      try {
+        const u = new URL(connUrl);
+        u.searchParams.set("device", id);
+        connUrl = u.toString();
+      } catch { /* keep original */ }
+    }
+    const connCfg: SignalingConfig = { url: connUrl, deviceId: id };
     try {
-      await signalingStart(signaling.value);
+      await signalingStart(connCfg);
       connected.value = true;
     } catch (e) {
       console.warn("[signaling] connect failed", e);
@@ -91,7 +114,6 @@ export const useSyncStore = defineStore("sync", () => {
   /** 监听 Rust 端发来的 sync-signal 事件，自动触发拉取（被动同步，不再广播） */
   async function startListening() {
     await listen<{ table: string }>("sync-signal", async () => {
-      // 收到信号触发一次完整 sync，broadcast=false 避免循环
       await triggerSync(false);
     });
   }

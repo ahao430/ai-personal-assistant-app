@@ -1,6 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 
-export type TabKey = "dashboard" | "chat" | "calendar" | "tasks" | "settings";
+export type TabKey =
+  | "dashboard"
+  | "chat"
+  | "calendar"
+  | "tasks"
+  | "notes"
+  | "image-gen"
+  | "more"
+  | "settings";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -30,6 +38,30 @@ const routes: RouteRecordRaw[] = [
     name: "tasks",
     component: () => import("@/views/Tasks.vue"),
     meta: { tab: "tasks", title: "待办" },
+  },
+  {
+    path: "/notes",
+    name: "notes",
+    component: () => import("@/views/Notes.vue"),
+    meta: { tab: "notes", title: "笔记" },
+  },
+  {
+    path: "/notes/:id",
+    name: "note-edit",
+    component: () => import("@/views/NoteEdit.vue"),
+    meta: { tab: "notes", title: "笔记" },
+  },
+  {
+    path: "/more",
+    name: "more",
+    component: () => import("@/views/More.vue"),
+    meta: { tab: "more", title: "更多" },
+  },
+  {
+    path: "/image-gen",
+    name: "image-gen",
+    component: () => import("@/views/ImageGen.vue"),
+    meta: { tab: "image-gen", title: "画图" },
   },
   {
     path: "/settings",

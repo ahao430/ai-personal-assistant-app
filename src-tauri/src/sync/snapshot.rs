@@ -49,6 +49,7 @@ const SIMPLE_TABLES: &[&str] = &[
     "llm_configs",
     "image_configs",
     "user_prefs",
+    "notes",
 ];
 
 const REMOTE_MANIFEST: &str = "manifest.json";

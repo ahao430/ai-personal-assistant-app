@@ -1,6 +1,6 @@
 [package]
 name = "ai-personal-assistant-app"
-version = "0.0.14"
+version = "0.0.15"
 description = "个人 AI 助手 App"
 authors = ["wanghao"]
 edition = "2021"
@@ -21,7 +21,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "multipart"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs"] }
 tokio-util = { version = "0.7", features = ["io"] }
 tokio-tungstenite = { version = "0.26", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }

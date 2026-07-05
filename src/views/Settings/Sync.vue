@@ -49,16 +49,6 @@ async function saveSignaling() {
   showToast("信令已保存");
 }
 
-function buildSignalingUrl() {
-  const url = signalingUrl.value.trim();
-  const id = deviceId.value.trim();
-  if (!url || !id) return url;
-
-  const u = new URL(url);
-  u.searchParams.set("device", id);
-  return u.toString();
-}
-
 async function syncNow() {
   if (!baseUrl.value) {
     showToast("请先配置 WebDAV");
@@ -73,12 +63,6 @@ async function syncNow() {
 
 async function connect() {
   if (!signalingUrl.value.trim()) return showToast("请输入信令 URL");
-  try {
-    signalingUrl.value = buildSignalingUrl();
-  } catch {
-    showToast("信令 URL 格式不正确");
-    return;
-  }
   await saveSignaling();
   await store.connectSignaling();
   showToast(store.connected ? "已连接" : "连接失败");

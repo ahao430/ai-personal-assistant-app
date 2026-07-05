@@ -75,5 +75,6 @@ function onBack() {
         <path d="M21 4v5h-5" />
       </svg>
     </button>
+    <slot name="right" />
   </header>
 </template>

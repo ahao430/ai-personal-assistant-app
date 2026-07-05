@@ -64,6 +64,18 @@ export const BASE_SCHEMA = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_at)`,
 
+  `CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT '',
+    font TEXT NOT NULL DEFAULT '',
+    paper TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at)`,
+
   `CREATE TABLE IF NOT EXISTS daily_reports (
     date TEXT PRIMARY KEY,
     summary TEXT NOT NULL DEFAULT '',

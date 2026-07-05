@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { kvGetJson, kvSetJson, KV_KEYS } from "@/api/kv";
+import { kvGetJson, KV_KEYS } from "@/api/kv";
+import { getUserPref, setUserPref } from "@/db/repos";
 import { queryCurrentPosition, reverseGeocode, ipLocate, type LocatedCity } from "@/api/weather-location";
 
 export type WeatherMode = "gps" | "manual";
@@ -14,6 +15,8 @@ export interface WeatherSettings {
   updatedAt?: number;
 }
 
+const USER_PREF_KEY = "weather_settings";
+
 export const useWeatherSettingsStore = defineStore("weather-settings", () => {
   const mode = ref<WeatherMode>("manual");
   const city = ref<string>("");
@@ -24,7 +27,15 @@ export const useWeatherSettingsStore = defineStore("weather-settings", () => {
   const locating = ref(false);
 
   async function load() {
-    const s = await kvGetJson<WeatherSettings>(KV_KEYS.weather);
+    // try user_prefs first (syncable), then fall back to local_kv (legacy)
+    let s = await getUserPref<WeatherSettings>(USER_PREF_KEY);
+    if (!s) {
+      s = await kvGetJson<WeatherSettings>(KV_KEYS.weather);
+      if (s) {
+        // migrate local_kv → user_prefs
+        await setUserPref(USER_PREF_KEY, s).catch(() => {});
+      }
+    }
     if (!s) return;
     mode.value = s.mode ?? "manual";
     city.value = s.city ?? "";
@@ -52,11 +63,9 @@ export const useWeatherSettingsStore = defineStore("weather-settings", () => {
     try {
       let located: LocatedCity;
       try {
-        // 先 GPS（桌面浏览器/有原生权限时正常）
         const pos = await queryCurrentPosition();
         located = await reverseGeocode(pos.latitude, pos.longitude);
       } catch {
-        // GPS 失败/超时（Android WebView 常见）→ IP 兜底
         located = await ipLocate();
       }
       mode.value = "gps";
@@ -91,7 +100,7 @@ export const useWeatherSettingsStore = defineStore("weather-settings", () => {
       longitude: longitude.value,
       updatedAt: updatedAt.value,
     };
-    await kvSetJson(KV_KEYS.weather, s);
+    await setUserPref(USER_PREF_KEY, s);
   }
 
   return {

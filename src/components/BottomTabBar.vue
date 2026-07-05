@@ -5,8 +5,8 @@ import {
   faHouse,
   faComments,
   faCalendarDays,
-  faListCheck,
   faUser,
+  faEllipsis,
 } from "@fortawesome/free-solid-svg-icons";
 import type { TabKey } from "@/router";
 
@@ -17,20 +17,33 @@ const props = defineProps<{
 const route = useRoute();
 const router = useRouter();
 
-const active = computed<TabKey>(
-  () => (props.modelValue ?? (route.meta.tab as TabKey)) ?? "dashboard"
-);
+const MORE_TABS: TabKey[] = ["tasks", "notes", "image-gen", "more"];
+
+const active = computed<TabKey>(() => {
+  const t = (props.modelValue ?? (route.meta.tab as TabKey)) ?? "dashboard";
+  if (MORE_TABS.includes(t)) return "more";
+  return t;
+});
 
 const tabs: { key: TabKey; label: string; icon: typeof faHouse }[] = [
   { key: "dashboard", label: "今日", icon: faHouse },
   { key: "chat", label: "对话", icon: faComments },
   { key: "calendar", label: "日历", icon: faCalendarDays },
-  { key: "tasks", label: "待办", icon: faListCheck },
+  { key: "more", label: "更多", icon: faEllipsis },
   { key: "settings", label: "我的", icon: faUser },
 ];
 
 function go(key: TabKey) {
-  if (key === active.value) return;
+  if (key === active.value) {
+    if (key === "more") {
+      router.push({ name: "more" });
+    }
+    return;
+  }
+  if (key === "more") {
+    router.push({ name: "more" });
+    return;
+  }
   router.push({ name: key });
 }
 </script>

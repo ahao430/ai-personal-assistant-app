@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "preview", src: string): void;
+  (e: "loaded", src: string): void;
 }>();
 
 const src = ref("");
@@ -24,12 +25,14 @@ async function load() {
   retried = false;
   if (props.remoteUrl) {
     src.value = props.remoteUrl;
+    emit("loaded", src.value);
     return;
   }
   try {
     const url = await resolveImageUrl(props.path);
     if (url) {
       src.value = url;
+      emit("loaded", src.value);
     } else {
       failed.value = true;
       errorMsg.value = "解析结果为空";
@@ -52,6 +55,7 @@ async function onImgError() {
         src.value = dataUrl;
         failed.value = false;
         errorMsg.value = "";
+        emit("loaded", src.value);
         return;
       }
     } catch { /* fall through to error display */ }

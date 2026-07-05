@@ -7,6 +7,7 @@ import { useTodoStore } from "@/stores/todo";
 import { useEventStore } from "@/stores/event";
 import { listTodos } from "@/db/repos";
 import { getDb } from "@/db";
+import { useLayoutMode } from "@/composables/useLayoutMode";
 
 const router = useRouter();
 const todoStore = useTodoStore();
@@ -76,12 +77,24 @@ function fmtTime(ms: number): string {
   return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
-const quickEntries = [
-  { key: "chat", label: "对话", path: "/chat", tint: "brand" },
-  { key: "tasks", label: "任务", path: "/tasks", tint: "accent" },
-  { key: "calendar", label: "日程", path: "/calendar", tint: "brand" },
-  { key: "settings", label: "设置", path: "/settings", tint: "accent" },
-] as const;
+const { isDesktop } = useLayoutMode();
+
+const quickEntries = computed(() => {
+  if (isDesktop.value) {
+    return [
+      { key: "chat", label: "对话", path: "/chat", tint: "brand" },
+      { key: "tasks", label: "任务", path: "/tasks", tint: "accent" },
+      { key: "calendar", label: "日程", path: "/calendar", tint: "brand" },
+      { key: "settings", label: "设置", path: "/settings", tint: "accent" },
+    ];
+  }
+  return [
+    { key: "calendar", label: "日程", path: "/calendar", tint: "brand" },
+    { key: "tasks", label: "待办", path: "/tasks", tint: "accent" },
+    { key: "notes", label: "笔记", path: "/notes", tint: "brand" },
+    { key: "more", label: "更多", path: "/more", tint: "accent" },
+  ];
+});
 </script>
 
 <template>
@@ -155,9 +168,20 @@ const quickEntries = [
               <circle cx="12" cy="14" r="1.2" fill="currentColor" stroke="none" />
             </svg>
             <!-- settings -->
-            <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-else-if="q.key === 'settings'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <!-- notes -->
+            <svg v-else-if="q.key === 'notes'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H17l3 3v13.5A1.5 1.5 0 0 1 18.5 21h-13A1.5 1.5 0 0 1 4 19.5z" />
+              <path d="M8 9h8M8 13h8M8 17h5" />
+            </svg>
+            <!-- more -->
+            <svg v-else-if="q.key === 'more'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+              <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
             </svg>
           </span>
           <span class="text-xs text-stone-600">{{ q.label }}</span>

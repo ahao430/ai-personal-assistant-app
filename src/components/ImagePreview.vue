@@ -3,16 +3,32 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 const props = defineProps<{
   src: string;
+  /** 可选：多图导航。传入后显示左右切换箭头 */
+  sources?: string[];
+  /** 可选：当前起始索引（仅当 sources 非空时生效） */
+  startIndex?: number;
   visible: boolean;
+  /** 可选：显示"保存到本地"按钮 */
+  showSave?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "close"): void;
+  (e: "save", src: string): void;
 }>();
 
 const scale = ref(1);
 const x = ref(0);
 const y = ref(0);
+const currentIndex = ref(0);
+
+const hasMulti = computed(() => (props.sources?.length ?? 0) > 1);
+const currentSrc = computed(() => {
+  if (props.sources && props.sources.length > 0) {
+    return props.sources[currentIndex.value] ?? props.src;
+  }
+  return props.src;
+});
 
 // 多指状态：1 指 = 单指拖拽；2 指 = pinch 缩放 + 双指中点平移
 const pointers = new Map<number, { x: number; y: number }>();
@@ -115,6 +131,25 @@ function onKeydown(e: KeyboardEvent) {
   if (!props.visible) return;
   if (e.key === "Escape") close();
   else if (e.key === "0") reset();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === "ArrowRight") next();
+}
+
+function prev() {
+  if (!hasMulti.value) return;
+  reset();
+  currentIndex.value =
+    (currentIndex.value - 1 + props.sources!.length) % props.sources!.length;
+}
+
+function next() {
+  if (!hasMulti.value) return;
+  reset();
+  currentIndex.value = (currentIndex.value + 1) % props.sources!.length;
+}
+
+function save() {
+  if (currentSrc.value) emit("save", currentSrc.value);
 }
 
 watch(
@@ -125,12 +160,15 @@ watch(
       pointers.clear();
       dragStart.value = null;
       pinchStart.value = null;
+      currentIndex.value = Math.max(0, Math.min(props.startIndex ?? 0, (props.sources?.length ?? 1) - 1));
       window.addEventListener("keydown", onKeydown);
     } else {
       window.removeEventListener("keydown", onKeydown);
     }
   }
 );
+
+watch(currentSrc, () => reset());
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
@@ -146,7 +184,7 @@ onBeforeUnmount(() => {
       @wheel="onWheel"
     >
       <img
-        :src="src"
+        :src="currentSrc"
         :style="{ transform }"
         class="max-h-full max-w-full touch-none cursor-grab will-change-transform"
         :class="{ 'object-contain': scale === 1 }"
@@ -158,8 +196,31 @@ onBeforeUnmount(() => {
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       />
+      <!-- 左右切换 -->
+      <button
+        v-if="hasMulti"
+        class="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur transition active:bg-white/20"
+        @click.stop="prev"
+        aria-label="上一张"
+      >
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+      </button>
+      <button
+        v-if="hasMulti"
+        class="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur transition active:bg-white/20"
+        @click.stop="next"
+        aria-label="下一张"
+      >
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
       <div class="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 backdrop-blur">
+        <span v-if="hasMulti">{{ currentIndex + 1 }} / {{ sources?.length }}</span>
         <span>{{ Math.round(scale * 100) }}%</span>
+        <button v-if="showSave" class="px-1.5 hover:text-white" @click.stop="save">保存</button>
         <button class="px-1.5 hover:text-white" @click.stop="reset">重置</button>
         <button class="px-1.5 hover:text-white" @click.stop="close">关闭</button>
       </div>

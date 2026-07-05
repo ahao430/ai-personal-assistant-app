@@ -9,7 +9,7 @@ import AppHeader from "@/components/AppHeader.vue";
 import AsyncImage from "@/components/AsyncImage.vue";
 import ImagePreview from "@/components/ImagePreview.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
-import { Button, Empty, Icon, showToast } from "vant";
+import { Button, Empty, Icon, Picker, Popup, showToast } from "vant";
 import { useChatStore, TOOL_LABELS, type Attachment, type LocalMessage } from "@/stores/chat";
 import { useLlmConfigStore } from "@/stores/llm-config";
 import { useChatBackgroundStore } from "@/stores/chat-background";
@@ -36,6 +36,9 @@ onMounted(async () => {
     chat.loadDate(new Date()),
     chatBg.loadFromDb(),
   ]);
+  if (!activeConfigId.value) {
+    activeConfigId.value = llm.defaultConfig?.id ?? null;
+  }
   await nextTick(scrollToBottom);
 });
 
@@ -55,10 +58,37 @@ function scrollToBottom() {
 }
 
 const canSend = computed(
-  () => !!input.value.trim() && !chat.sending && !!llm.defaultConfig
+  () => !!input.value.trim() && !chat.sending && !!activeConfig.value
 );
 
-const activeConfigLabel = computed(() => llm.defaultConfig?.name ?? "未配置");
+const activeConfigId = ref<string | null>(null);
+
+const activeConfig = computed(() =>
+  llm.configs.find((c) => c.id === activeConfigId.value) ?? llm.defaultConfig
+);
+
+const modelPickerVisible = ref(false);
+const pickerValue = ref<string[]>([]);
+
+const modelColumns = computed(() =>
+  llm.configs.map((c) => ({ text: c.name, value: c.id }))
+);
+
+function openModelPicker() {
+  pickerValue.value = [activeConfigId.value ?? llm.configs[0]?.id ?? ""];
+  modelPickerVisible.value = true;
+}
+
+function onModelConfirm({ selectedValues }: { selectedValues: string[] }) {
+  if (selectedValues[0]) activeConfigId.value = selectedValues[0];
+  modelPickerVisible.value = false;
+}
+
+function selectModel(id: string) {
+  activeConfigId.value = id;
+  modelPickerVisible.value = false;
+}
+
 
 const bgEnabled = computed(() => chatBg.type !== "none");
 
@@ -108,13 +138,13 @@ const bgColorStyle = computed<Record<string, string>>(() => {
 async function send(text?: string) {
   const content = (text ?? input.value).trim();
   if (!content) return;
-  if (!llm.defaultConfig) {
+  if (!activeConfig.value) {
     showToast("请先配置大模型");
     router.push("/settings/llm");
     return;
   }
   input.value = "";
-  await chat.send(content, llm.toApi(llm.defaultConfig));
+  await chat.send(content, llm.toApi(activeConfig.value));
 }
 
 async function remove(m: { id: string }) {
@@ -132,8 +162,8 @@ function resend(m: { id: string; role: string; content: string }) {
     }
     text = pair;
   }
-  if (!text.trim() || !llm.defaultConfig) {
-    if (!llm.defaultConfig) {
+  if (!text.trim() || !activeConfig.value) {
+    if (!activeConfig.value) {
       showToast("请先配置大模型");
       router.push("/settings/llm");
     }
@@ -171,6 +201,33 @@ function prettyArgs(args: Record<string, unknown>): string {
   } catch {
     return String(args);
   }
+}
+
+const TIME_GAP_MS = 5 * 60 * 1000;
+
+function shouldShowTime(index: number): boolean {
+  const msgs = chat.messages;
+  const m = msgs[index];
+  if (!m || m.pivot) return false;
+  if (index === 0) return true;
+  const prev = msgs[index - 1];
+  if (!prev || prev.pivot) return true;
+  return m.createdAt - prev.createdAt > TIME_GAP_MS;
+}
+
+function fmtMsgTime(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  ) {
+    return hm;
+  }
+  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
 const previewSrc = ref("");
@@ -330,6 +387,24 @@ async function inlineImages(container: HTMLElement): Promise<void> {
   );
 }
 
+async function deleteSelected() {
+  if (!selectedIds.value.size) return;
+  for (const id of selectedIds.value) {
+    await chat.removeMessage(id);
+  }
+  showToast("已删除");
+  exitSelection();
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("已复制");
+  } catch {
+    showToast("复制失败");
+  }
+}
+
 async function copyMarkdown() {
   if (!selectedIds.value.size) return;
   const messages = chat.messages.filter((m) => selectedIds.value.has(m.id));
@@ -450,10 +525,54 @@ async function exportImage() {
       class="flex items-center justify-between border-b border-gray-100 bg-white px-4 py-2 text-xs text-gray-500"
     >
       <div class="flex items-center gap-1.5">
-        <span>
-          模型：<span class="font-medium text-gray-900">{{ activeConfigLabel }}</span>
-        </span>
+        <span class="whitespace-nowrap">模型：</span>
+        <div class="relative">
+          <button
+            class="flex items-center gap-1 truncate rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-900 hover:border-brand-400 focus:outline-none"
+            :style="{ minWidth: '100px', maxWidth: '220px' }"
+            @click="openModelPicker"
+          >
+            <span class="truncate">{{ activeConfig?.name ?? '未配置' }}</span>
+            <svg class="h-3 w-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <!-- Desktop dropdown -->
+          <div
+            v-if="isDesktop && modelPickerVisible"
+            class="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
+          >
+            <button
+              v-for="c in llm.configs"
+              :key="c.id"
+              class="w-full px-3 py-1.5 text-left text-xs transition"
+              :class="c.id === activeConfigId ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-700 hover:bg-gray-50'"
+              @click="selectModel(c.id)"
+            >
+              {{ c.name }}
+            </button>
+          </div>
+        </div>
       </div>
+      <!-- Desktop click-outside mask -->
+      <div
+        v-if="isDesktop && modelPickerVisible"
+        class="fixed inset-0 z-40"
+        @click="modelPickerVisible = false"
+      />
+      <!-- Mobile Picker -->
+      <Popup v-if="!isDesktop" v-model:show="modelPickerVisible" position="bottom" :style="{ borderRadius: '16px 16px 0 0' }">
+        <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+          <button class="text-sm text-gray-500" @click="modelPickerVisible = false">取消</button>
+          <span class="text-sm font-medium text-gray-900">选择模型</span>
+          <button class="text-sm font-medium text-brand-500" @click="onModelConfirm({ selectedValues: pickerValue })">确认</button>
+        </div>
+        <Picker
+          v-model="pickerValue"
+          :columns="modelColumns"
+          :columns-field-names="{ text: 'text', value: 'value' }"
+        />
+      </Popup>
       <div class="flex items-center gap-3">
         <button
           class="text-gray-500 hover:text-brand-500"
@@ -462,7 +581,7 @@ async function exportImage() {
         >
           新话题
         </button>
-        <button class="text-brand-500" @click="router.push('/settings/llm')">切换</button>
+        <button class="text-brand-500" @click="router.push('/settings/llm')">管理</button>
       </div>
     </div>
 
@@ -488,7 +607,7 @@ async function exportImage() {
 
       <div v-else class="space-y-3">
         <div
-          v-for="m in chat.messages"
+          v-for="(m, index) in chat.messages"
           :key="m.id"
           :data-msg-id="m.id"
         >
@@ -502,8 +621,16 @@ async function exportImage() {
           </div>
           <div
             v-else
-            class="group flex flex-row gap-2"
+            class="group"
           >
+          <!-- 时间标签 -->
+          <div
+            v-if="shouldShowTime(index)"
+            class="flex justify-center py-1"
+          >
+            <span class="rounded-full bg-stone-100 px-2.5 py-0.5 text-[11px] text-stone-400">{{ fmtMsgTime(m.createdAt) }}</span>
+          </div>
+          <div class="flex flex-row gap-2">
           <div
             v-if="selectionMode && isSelectable(m)"
             class="flex items-start pt-2"
@@ -620,10 +747,12 @@ async function exportImage() {
           </div>
           <div
             v-if="!m.streaming && !selectionMode"
-            class="mt-1 flex gap-3 px-1 text-xs text-gray-400 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+            class="mt-1 flex gap-3 px-1 text-xs text-gray-500 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
           >
             <button class="hover:text-brand-500" @click="resend(m)">重新发送</button>
+            <button class="hover:text-brand-500" @click="copyText(m.content)">复制</button>
             <button class="hover:text-red-500" @click="remove(m)">删除</button>
+          </div>
           </div>
           </div>
           </div>
@@ -641,6 +770,7 @@ async function exportImage() {
       <div class="flex flex-wrap gap-2">
         <Button size="small" :disabled="!selectedIds.size" @click="copyMarkdown">复制 Markdown</Button>
         <Button size="small" type="primary" :disabled="!selectedIds.size" :loading="exporting" @click="exportImage">导出图片</Button>
+        <Button size="small" type="danger" :disabled="!selectedIds.size" @click="deleteSelected">删除</Button>
         <Button size="small" @click="exitSelection">取消</Button>
       </div>
     </div>

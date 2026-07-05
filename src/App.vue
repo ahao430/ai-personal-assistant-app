@@ -6,7 +6,8 @@ import SideNav from "@/components/SideNav.vue";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutMode } from "@/composables/useLayoutMode";
 
-useThemeStore();
+const theme = useThemeStore();
+theme.init();
 
 const { isDesktop, toggle } = useLayoutMode();
 const isDev = import.meta.env.DEV;

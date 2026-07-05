@@ -8,6 +8,8 @@ import {
   faListCheck,
   faUser,
   faTableColumns,
+  faImage,
+  faBookOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import type { TabKey } from "@/router";
 
@@ -27,8 +29,10 @@ const active = computed<TabKey>(
 const tabs: { key: TabKey; label: string; icon: typeof faHouse }[] = [
   { key: "dashboard", label: "今日", icon: faHouse },
   { key: "chat", label: "对话", icon: faComments },
+  { key: "image-gen", label: "画图", icon: faImage },
   { key: "calendar", label: "日历", icon: faCalendarDays },
   { key: "tasks", label: "待办", icon: faListCheck },
+  { key: "notes", label: "笔记", icon: faBookOpen },
   { key: "settings", label: "我的", icon: faUser },
 ];
 

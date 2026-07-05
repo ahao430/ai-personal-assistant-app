@@ -11,7 +11,7 @@ import { useAppStore } from "@/stores/app";
 import { useWeatherSettingsStore } from "@/stores/weather-settings";
 import { useChatBackgroundStore } from "@/stores/chat-background";
 
-const APP_VERSION = "0.0.14";
+const APP_VERSION = "0.0.15";
 
 const router = useRouter();
 const llm = useLlmConfigStore();

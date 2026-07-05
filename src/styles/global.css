@@ -54,3 +54,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 }
+
+.font-songti {
+  font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+}
+.font-kaiti {
+  font-family: "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif CJK SC", serif;
+}
+.font-mono {
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
