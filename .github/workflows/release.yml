@@ -143,14 +143,14 @@ jobs:
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 
-      - name: Install fixed debug keystore
+      - name: Inject signing config & ABI splits
         run: |
-          mkdir -p ~/.android
-          cp .github/android/debug.keystore ~/.android/debug.keystore
-          echo "Debug keystore installed to ~/.android/debug.keystore"
+          cp .github/android/debug.keystore src-tauri/gen/android/app/keystore.keystore
+          cp .github/android/customizations.gradle src-tauri/gen/android/app/customizations.gradle
+          printf '\napply from: "customizations.gradle"\n' >> src-tauri/gen/android/app/build.gradle.kts
 
       - name: Build Android APK
-        run: pnpm tauri android build --apk --debug
+        run: pnpm tauri android build --apk
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk_home }}
 

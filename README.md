@@ -2,6 +2,15 @@
 
 Tauri + Vue 3 实现的个人助手应用，支持会话、待办、日程、日报、模型配置、画图、WebDAV 备份同步和 Cloudflare Workers 信令。
 
+## v0.0.8 更新
+
+### 安卓
+
+- **大幅减小 APK 体积**：CI 切到 release 构建（R8 + Rust release profile + JS minify + strip 符号），并启用 ABI splits——每个架构单独出包，避免一份 APK 塞 4 套 Rust native 库。
+- **按架构分包发布**：`arm64-v8a`（现代手机主流）/ `armeabi-v7a`（老设备）/ `x86_64` / `x86`（模拟器）/ `universal`（兜底）。下 Releases 时按手机 CPU 选 arm64-v8a 版本即可，体积约为 universal 的 25%。
+- **release 签名**：复用 `.github/android/debug.keystore` 给 release variant 签名，通过 `apply from: "customizations.gradle"` 注入到 Tauri 生成的 gradle 工程，不动 Tauri 模板本身。
+- 同一份证书同时签 debug 和 release，相互可覆盖升级。
+
 ## v0.0.7 更新
 
 ### 安卓
