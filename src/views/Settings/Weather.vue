@@ -40,7 +40,8 @@ async function saveManual() {
 async function locate() {
   try {
     const r = await store.locate();
-    showToast(`已定位：${r.city}`);
+    const tag = r.source === "ip" ? "（IP 估算）" : "";
+    showToast(`已定位：${r.city}${tag}`);
     manualInput.value = "";
   } catch (e) {
     const msg = String(e);

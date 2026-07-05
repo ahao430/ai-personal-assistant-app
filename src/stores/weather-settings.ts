@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { kvGetJson, kvSetJson, KV_KEYS } from "@/api/kv";
-import { queryCurrentPosition, reverseGeocode, type LocatedCity } from "@/api/weather-location";
+import { queryCurrentPosition, reverseGeocode, ipLocate, type LocatedCity } from "@/api/weather-location";
 
 export type WeatherMode = "gps" | "manual";
 
@@ -50,8 +50,15 @@ export const useWeatherSettingsStore = defineStore("weather-settings", () => {
     if (locating.value) throw new Error("正在定位");
     locating.value = true;
     try {
-      const pos = await queryCurrentPosition();
-      const located = await reverseGeocode(pos.latitude, pos.longitude);
+      let located: LocatedCity;
+      try {
+        // 先 GPS（桌面浏览器/有原生权限时正常）
+        const pos = await queryCurrentPosition();
+        located = await reverseGeocode(pos.latitude, pos.longitude);
+      } catch {
+        // GPS 失败/超时（Android WebView 常见）→ IP 兜底
+        located = await ipLocate();
+      }
       mode.value = "gps";
       city.value = located.city;
       detail.value = located.detail;

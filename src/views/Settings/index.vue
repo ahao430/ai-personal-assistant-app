@@ -10,7 +10,7 @@ import { useThemeStore } from "@/stores/theme";
 import { useAppStore } from "@/stores/app";
 import { useWeatherSettingsStore } from "@/stores/weather-settings";
 
-const APP_VERSION = "0.0.8";
+const APP_VERSION = "0.0.9";
 
 const router = useRouter();
 const llm = useLlmConfigStore();

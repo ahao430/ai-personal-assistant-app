@@ -2,6 +2,14 @@
 
 Tauri + Vue 3 实现的个人助手应用，支持会话、待办、日程、日报、模型配置、画图、WebDAV 备份同步和 Cloudflare Workers 信令。
 
+## v0.0.9 更新
+
+### 天气
+
+- **修复 Android 定位超时**：Android WebView 默认不弹原生定位权限框，导致 `navigator.geolocation` 一直挂到超时。新增 **IP 兜底定位**（ipapi.co）：GPS 5s 内拿不到位置时自动切到 IP 估算，城市级精度对天气足够。
+- 桌面端浏览器有定位权限时仍走 GPS + 反查（BigDataCloud），精度不变。
+- 定位结果 toast 区分来源：GPS 直接显示城市名，IP 兜底会带「（IP 估算）」尾标。
+
 ## v0.0.8 更新
 
 ### 安卓

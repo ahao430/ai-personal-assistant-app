@@ -1,6 +1,6 @@
 [package]
 name = "ai-personal-assistant-app"
-version = "0.0.8"
+version = "0.0.9"
 description = "个人 AI 助手 App"
 authors = ["wanghao"]
 edition = "2021"

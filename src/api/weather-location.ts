@@ -3,6 +3,7 @@ export interface LocatedCity {
   detail: string;
   latitude: number;
   longitude: number;
+  source?: "gps" | "ip";
 }
 
 export type SystemPlatform = "mac" | "win" | "linux" | "other";
@@ -63,7 +64,31 @@ export async function reverseGeocode(lat: number, lon: number): Promise<LocatedC
   const j = (await res.json()) as ReverseGeoResult;
   const city = j.city || j.locality || j.principalSubdivision || j.countryName || "当前位置";
   const detail = [j.principalSubdivision, j.countryName].filter(Boolean).join(" · ");
-  return { city, detail, latitude: lat, longitude: lon };
+  return { city, detail, latitude: lat, longitude: lon, source: "gps" };
+}
+
+interface IpGeoResult {
+  city?: string;
+  region?: string;
+  country_name?: string;
+  latitude?: number;
+  longitude?: number;
+  error?: boolean;
+  reason?: string;
+}
+
+/** IP 兜底定位：精度城市级，对天气足够；无需任何权限，Android WebView 走不通 GPS 时用 */
+export async function ipLocate(): Promise<LocatedCity> {
+  const res = await fetch("https://ipapi.co/json/");
+  if (!res.ok) throw new Error(`IP 定位失败 (HTTP ${res.status})`);
+  const j = (await res.json()) as IpGeoResult;
+  if (j.error) throw new Error(`IP 定位失败：${j.reason || "未知原因"}`);
+  if (typeof j.latitude !== "number" || typeof j.longitude !== "number") {
+    throw new Error("IP 定位无经纬度返回");
+  }
+  const city = j.city || j.region || "当前位置";
+  const detail = [j.region, j.country_name].filter(Boolean).join(" · ");
+  return { city, detail, latitude: j.latitude, longitude: j.longitude, source: "ip" };
 }
 
 export function queryCurrentPosition(): Promise<{ latitude: number; longitude: number }> {
@@ -75,7 +100,7 @@ export function queryCurrentPosition(): Promise<{ latitude: number; longitude: n
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       (err) => reject(new Error(geoErrorMessage(err))),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60 * 60 * 1000 }
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60 * 60 * 1000 }
     );
   });
 }
