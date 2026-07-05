@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { resolveImageUrl } from "@/api/asset";
+import { getAppDataDir, resolveImageUrl } from "@/api/asset";
+import { invoke } from "@tauri-apps/api/core";
 
 const props = defineProps<{
   path: string;
@@ -15,10 +16,12 @@ const emit = defineEmits<{
 const src = ref("");
 const failed = ref(false);
 const errorMsg = ref("");
+let retried = false;
 
 async function load() {
   failed.value = false;
   errorMsg.value = "";
+  retried = false;
   if (props.remoteUrl) {
     src.value = props.remoteUrl;
     return;
@@ -37,7 +40,22 @@ async function load() {
   }
 }
 
-function onImgError() {
+async function onImgError() {
+  // 如果当前 src 不是 data URL，降级为 fetch_as_data_url 重试一次
+  if (!retried && src.value && !src.value.startsWith("data:")) {
+    retried = true;
+    try {
+      const base = await getAppDataDir();
+      const abs = `${base}/images/${props.path}`;
+      const dataUrl = await invoke<string | null>("fetch_as_data_url", { url: abs });
+      if (dataUrl) {
+        src.value = dataUrl;
+        failed.value = false;
+        errorMsg.value = "";
+        return;
+      }
+    } catch { /* fall through to error display */ }
+  }
   failed.value = true;
   if (!errorMsg.value) errorMsg.value = "<img> 加载触发 error 事件";
 }
