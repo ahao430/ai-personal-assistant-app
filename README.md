@@ -2,6 +2,12 @@
 
 Tauri + Vue 3 实现的个人助手应用，支持会话、待办、日程、日报、模型配置、画图、WebDAV 备份同步和 Cloudflare Workers 信令。
 
+## 截图
+
+| 桌面端 | 安卓端 |
+| --- | --- |
+| ![桌面端](public/desktop.png) | ![安卓端](public/android.jpg) |
+
 ## v0.0.17 更新
 
 ### 画图
