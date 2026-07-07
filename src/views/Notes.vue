@@ -22,6 +22,7 @@ const selectedIds = ref<Set<string>>(new Set());
 const showActionFor = ref<string | null>(null);
 let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 let pointerStart: { x: number; y: number } | null = null;
+let ignoreNextClick = false;
 
 onMounted(() => store.reload());
 onUnmounted(() => {
@@ -49,6 +50,10 @@ function openNew() {
 }
 
 function openEdit(n: NoteRow) {
+  if (ignoreNextClick) {
+    ignoreNextClick = false;
+    return;
+  }
   if (selectionMode.value) {
     toggleSelect(n.id);
     return;
@@ -105,10 +110,13 @@ async function deleteOne(n: NoteRow) {
 
 function onPointerDown(e: PointerEvent, n: NoteRow) {
   if (selectionMode.value) return;
+  if (e.pointerType !== "touch") return;
   pointerStart = { x: e.clientX, y: e.clientY };
   longPressTimer = setTimeout(() => {
     enterSelection(n.id);
+    ignoreNextClick = true;
     pointerStart = null;
+    longPressTimer = undefined;
   }, 500);
 }
 
@@ -116,9 +124,12 @@ function onPointerMove(e: PointerEvent) {
   if (!pointerStart) return;
   const dx = e.clientX - pointerStart.x;
   const dy = e.clientY - pointerStart.y;
-  if (Math.hypot(dx, dy) > 10 && longPressTimer) {
-    clearTimeout(longPressTimer);
-    longPressTimer = undefined;
+  if (Math.hypot(dx, dy) > 10) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = undefined;
+    }
+    pointerStart = null;
   }
 }
 

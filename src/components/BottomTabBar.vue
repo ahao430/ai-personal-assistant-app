@@ -17,7 +17,7 @@ const props = defineProps<{
 const route = useRoute();
 const router = useRouter();
 
-const MORE_TABS: TabKey[] = ["tasks", "notes", "image-gen", "more"];
+const MORE_TABS: TabKey[] = ["tasks", "notes", "image-gen", "search", "more"];
 
 const active = computed<TabKey>(() => {
   const t = (props.modelValue ?? (route.meta.tab as TabKey)) ?? "dashboard";

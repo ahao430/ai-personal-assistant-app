@@ -386,6 +386,19 @@ export async function listNotes(): Promise<NoteRow[]> {
   );
 }
 
+export async function searchNotes(keyword: string): Promise<NoteRow[]> {
+  const q = keyword.trim();
+  if (!q) return [];
+  const db = await getDb();
+  return db.select<NoteRow[]>(
+    `SELECT * FROM notes
+     WHERE title LIKE $1 OR content LIKE $1
+     ORDER BY updated_at DESC
+     LIMIT 50`,
+    [`%${q}%`]
+  );
+}
+
 export async function getNote(id: string): Promise<NoteRow | null> {
   const db = await getDb();
   const rows = await db.select<NoteRow[]>(

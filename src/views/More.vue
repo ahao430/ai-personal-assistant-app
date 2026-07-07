@@ -10,10 +10,11 @@ interface MoreEntry {
   desc: string;
   path: string;
   tint: "brand" | "accent";
-  icon: "tasks" | "notes" | "image";
+  icon: "tasks" | "notes" | "image" | "search";
 }
 
 const entries: MoreEntry[] = [
+  { key: "search", label: "搜索", desc: "搜索对话、笔记和画图", path: "/search", tint: "brand", icon: "search" },
   { key: "tasks", label: "待办", desc: "管理任务与提醒", path: "/tasks", tint: "accent", icon: "tasks" },
   { key: "notes", label: "笔记", desc: "Markdown 笔记，多端同步", path: "/notes", tint: "brand", icon: "notes" },
   { key: "image", label: "画图", desc: "单次生成图片，可选参考图", path: "/image-gen", tint: "accent", icon: "image" },
@@ -52,10 +53,15 @@ function go(path: string) {
               <path d="M8 9h8M8 13h8M8 17h5" />
             </svg>
             <!-- image -->
-            <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-else-if="e.icon === 'image'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
               <circle cx="9" cy="10" r="1.5" />
               <path d="M21 16l-5-4-7 6" />
+            </svg>
+            <!-- search -->
+            <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="M16 16l4 4" />
             </svg>
           </span>
           <div>

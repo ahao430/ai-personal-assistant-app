@@ -11,6 +11,11 @@ export interface ChatMessageRow {
   created_at: number;
 }
 
+export interface SearchChatMessageRow extends ChatMessageRow {
+  date: string;
+  table: string;
+}
+
 /**
  * 删除/编辑等本地变更时插入一条 sentinel：
  * 让 max(created_at) 自动变大，下次同步 PUSH 整表覆盖远端。
@@ -72,11 +77,31 @@ export async function deleteMessage(date: Date, id: string): Promise<void> {
   );
 }
 
-/** 列出所有 chat_* 表名（按日期升序） */
 export async function listChatDates(): Promise<string[]> {
   const db = await getDb();
   const rows = await db.select<{ name: string }[]>(
     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'chat_%' ORDER BY name ASC"
   );
   return rows.map((r) => r.name);
+}
+
+export async function searchMessages(keyword: string): Promise<SearchChatMessageRow[]> {
+  const q = keyword.trim();
+  if (!q) return [];
+  const db = await getDb();
+  const tables = await listChatDates();
+  const results: SearchChatMessageRow[] = [];
+  const pattern = `%${q}%`;
+  for (const table of tables) {
+    const rows = await db.select<ChatMessageRow[]>(
+      `SELECT * FROM ${table}
+       WHERE content LIKE $1 AND NOT (role = 'system' AND content IN ($2, $3))
+       ORDER BY created_at DESC
+       LIMIT 30`,
+      [pattern, CHAT_UPDATED_SENTINEL, "__CHAT_CONTEXT_PIVOT__"]
+    );
+    const date = table.replace("chat_", "");
+    results.push(...rows.map((row) => ({ ...row, table, date })));
+  }
+  return results.sort((a, b) => b.created_at - a.created_at).slice(0, 50);
 }

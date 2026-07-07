@@ -7,6 +7,7 @@ export type TabKey =
   | "tasks"
   | "notes"
   | "image-gen"
+  | "search"
   | "more"
   | "settings";
 
@@ -62,6 +63,12 @@ const routes: RouteRecordRaw[] = [
     name: "image-gen",
     component: () => import("@/views/ImageGen.vue"),
     meta: { tab: "image-gen", title: "画图" },
+  },
+  {
+    path: "/search",
+    name: "search",
+    component: () => import("@/views/Search.vue"),
+    meta: { tab: "search", title: "搜索" },
   },
   {
     path: "/settings",

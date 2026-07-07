@@ -17,6 +17,7 @@ import {
 import { useEventStore } from "@/stores/event";
 import { useHolidays, type HolidayLabel } from "@/composables/useHolidays";
 import { getReport, getReportsRange, type DailyReportRow } from "@/api/report";
+import { getUserPref, setUserPref } from "@/db/repos";
 import type { EventRow } from "@/db/repos";
 
 const store = useEventStore();
@@ -194,6 +195,25 @@ const selectedDateKey = computed(() => {
   return `${cursor.value.year}-${pad(cursor.value.month)}-${pad(selectedDay.value)}`;
 });
 
+const dayLog = ref("");
+const savingDayLog = ref(false);
+
+async function loadDayLog() {
+  dayLog.value = await getUserPref<string>(`calendar_log:${selectedDateKey.value}`) ?? "";
+}
+
+async function saveDayLog() {
+  savingDayLog.value = true;
+  try {
+    await setUserPref(`calendar_log:${selectedDateKey.value}`, dayLog.value);
+    showToast("日志已保存");
+  } finally {
+    savingDayLog.value = false;
+  }
+}
+
+watch(selectedDateKey, () => { loadDayLog(); }, { immediate: true });
+
 const isPastDay = computed(() => {
   const today0 = new Date();
   today0.setHours(0, 0, 0, 0);
@@ -293,7 +313,7 @@ function cellClass(year: number, month: number, day: number | null) {
       <button
         v-for="(day, i) in monthMatrix"
         :key="i"
-        class="relative flex aspect-square flex-col items-center justify-center gap-1 bg-white text-base leading-none md:aspect-auto md:h-20"
+        class="relative flex aspect-square flex-col items-center justify-center gap-1 bg-white text-base leading-none md:aspect-auto md:h-16"
         :class="cellClass(cursor.year, cursor.month, day)"
         @click="day && (selectedDay = day)"
       >
@@ -351,7 +371,7 @@ function cellClass(year: number, month: number, day: number | null) {
           <Button size="mini" type="primary" plain @click="openAdd()">+ 事件</Button>
         </div>
       </div>
-      <Empty v-if="!eventsOfSelectedDay.length" description="当天无事件" />
+      <Empty v-if="!eventsOfSelectedDay.length" description="当天无事件" :image-size="56" />
       <div v-else class="space-y-2">
         <Cell
           v-for="e in eventsOfSelectedDay"
@@ -371,6 +391,24 @@ function cellClass(year: number, month: number, day: number | null) {
             <div v-if="e.location" class="text-xs text-gray-400">📍 {{ e.location }}</div>
           </template>
         </Cell>
+      </div>
+    </div>
+
+    <!-- 当日日志 -->
+    <div class="mt-2 px-3 pb-2">
+      <div class="rounded-2xl bg-white p-3 shadow-card ring-1 ring-stone-100">
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-gray-700">当日日志</h3>
+          <Button size="mini" type="primary" plain :loading="savingDayLog" @click="saveDayLog">保存</Button>
+        </div>
+        <Field
+          v-model="dayLog"
+          type="textarea"
+          rows="4"
+          autosize
+          placeholder="记录这一天的想法、复盘或流水账"
+          class="rounded-xl bg-stone-50"
+        />
       </div>
     </div>
 

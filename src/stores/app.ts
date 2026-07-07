@@ -1,20 +1,22 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { showToast } from "vant";
 import { useSyncStore } from "./sync";
 
 export const useAppStore = defineStore("app", () => {
   const syncing = ref(false);
-  const lastSyncedAt = ref<number | null>(null);
+
+  const sync = useSyncStore();
+  const lastSyncedAt = computed(() => sync.lastSyncedAt);
+  const lastSyncError = computed(() => sync.lastError);
+  const lastSyncResult = computed(() => sync.lastResult);
 
   async function triggerSync() {
     if (syncing.value) return;
     syncing.value = true;
     try {
-      const sync = useSyncStore();
       const result = await sync.triggerSync();
       if (result) {
-        lastSyncedAt.value = Date.now();
         if (result.errors.length) {
           showToast(`同步完成（${result.errors.length} 个错误）`);
         } else {
@@ -30,5 +32,5 @@ export const useAppStore = defineStore("app", () => {
     }
   }
 
-  return { syncing, lastSyncedAt, triggerSync };
+  return { syncing, lastSyncedAt, lastSyncError, lastSyncResult, triggerSync };
 });

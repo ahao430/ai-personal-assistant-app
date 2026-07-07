@@ -135,6 +135,24 @@ const quickEntries = computed(() => {
         </div>
       </section>
 
+      <!-- 搜索入口 -->
+      <button
+        class="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3 text-left shadow-card ring-1 ring-stone-100 transition active:scale-[0.99]"
+        @click="go('/search')"
+      >
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M16 16l4 4" />
+          </svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-stone-800">全局搜索</div>
+          <div class="mt-0.5 text-xs text-stone-400">搜索对话、笔记和画图记录</div>
+        </div>
+        <span class="text-stone-300">›</span>
+      </button>
+
       <!-- 快捷入口 -->
       <section class="grid grid-cols-4 gap-2">
         <button

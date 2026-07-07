@@ -20,12 +20,17 @@ const selectedPaths = ref<Set<string>>(new Set());
 
 let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 let pointerStart: { x: number; y: number } | null = null;
+let ignoreNextClick = false;
 
 function onLoaded(r: ImageGenResult, src: string) {
   srcMap.value[r.path] = src;
 }
 
 function onClick(r: ImageGenResult) {
+  if (ignoreNextClick) {
+    ignoreNextClick = false;
+    return;
+  }
   if (selectionMode.value) {
     toggleSelect(r.path);
     return;
@@ -72,10 +77,13 @@ async function deleteSelected() {
 
 function onPointerDown(e: PointerEvent, r: ImageGenResult) {
   if (selectionMode.value) return;
+  if (e.pointerType !== "touch") return;
   pointerStart = { x: e.clientX, y: e.clientY };
   longPressTimer = setTimeout(() => {
     enterSelection(r.path);
+    ignoreNextClick = true;
     pointerStart = null;
+    longPressTimer = undefined;
   }, 500);
 }
 
@@ -83,9 +91,12 @@ function onPointerMove(e: PointerEvent) {
   if (!pointerStart) return;
   const dx = e.clientX - pointerStart.x;
   const dy = e.clientY - pointerStart.y;
-  if (Math.hypot(dx, dy) > 10 && longPressTimer) {
-    clearTimeout(longPressTimer);
-    longPressTimer = undefined;
+  if (Math.hypot(dx, dy) > 10) {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = undefined;
+    }
+    pointerStart = null;
   }
 }
 

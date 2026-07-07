@@ -251,6 +251,7 @@ const exporting = ref(false);
 
 let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 let pointerStart: { x: number; y: number } | null = null;
+let ignoreNextClick = false;
 
 function isSelectable(m: LocalMessage): boolean {
   return !m.pivot && !m.streaming;
@@ -278,6 +279,10 @@ function exitSelection() {
 }
 
 function onMessageClick(m: LocalMessage) {
+  if (ignoreNextClick) {
+    ignoreNextClick = false;
+    return;
+  }
   if (!selectionMode.value) return;
   if (!isSelectable(m)) return;
   toggleSelection(m.id);
@@ -300,6 +305,7 @@ function onPointerDown(e: PointerEvent, m: LocalMessage) {
   pointerStart = { x: e.clientX, y: e.clientY };
   longPressTimer = setTimeout(() => {
     startSelection(m.id);
+    ignoreNextClick = true;
     pointerStart = null;
     longPressTimer = undefined;
   }, 500);
